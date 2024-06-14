@@ -104,7 +104,7 @@ time_ref = 0.5 * (time.min() + time.max())
 # Making a fine grid that spans the observation window for plotting purposes #
 t = np.linspace(time.min() - 5, time.max() + 5, 5000)
 
-print(merged_data)
+# print(merged_data)
 plt.figure()
 plt.plot(time, rad_vel, linestyle = 'none',marker = 'o')
 for n_instrument in np.unique(instrument):
@@ -114,7 +114,7 @@ for n_instrument in np.unique(instrument):
 plt.title('Radial Velocity Data')
 plt.xlabel("time [days]")
 plt.ylabel("radial velocity [m/s]")
-plt.legend()
+#plt.legend()
 # plt.savefig('Transit-data')
 
 phase = phaseup(mx_blue_time, 2521.81748925, 3.31793068)
@@ -402,7 +402,7 @@ with model:
 
     ax.set_title("initial model")
     ax.set_ylabel("radial velocity [m/s]")
-    plt.legend()
+    #plt.legend()
     # # fig.savefig('rv-best-initial-best-fit')
     # # plt.close(fig)
     # plt.plot(t, pmx.eval_in_model(model.bkg_pred), ":k", alpha=0.5, zorder = 100)
@@ -415,7 +415,7 @@ with model:
     ax.set_ylabel("residuals [m/s]")
     # ax.set_xlim(3230, 3250)
     ax.set_xlabel("time [days]")
-    ax.figure.savefig('TOI-5349-b_residuals_plot_06-10-2024.pdf', bbox_inches='tight', pad_inches=0.0)
+    ax.figure.savefig('TOI-5349-b_residuals_plot_06-14-2024.pdf', bbox_inches='tight', pad_inches=0.0)
 
 # print(np.unique(map_soln['RVMean'])) 
 # print(map_soln['RVOffset'])
@@ -457,7 +457,7 @@ ax.set_xlim(-0.5, 0.5)
 ax.set_ylabel("de-trended flux [ppt]")
 _ = ax.set_xlabel("time since transit")
 
-ax.figure.savefig('TOI-5349-b_LC_phase_plot_06-10-2024.pdf', bbox_inches='tight', pad_inches=0.0)
+ax.figure.savefig('TOI-5349-b_LC_phase_plot_06-14-2024.pdf', bbox_inches='tight', pad_inches=0.0)
 
 
 
@@ -485,7 +485,7 @@ plt.title("TOI-5349b")
 plt.ylabel("radial velocity [ms/s]")
 plt.xlabel("phase [days]")
 plt.legend()
-plt.savefig('TOI-5349-b_RV_phase_plot_06-10-2024.pdf',bbox_inches='tight', pad_inches=0.0)
+plt.savefig('TOI-5349-b_RV_phase_plot_06-14-2024.pdf',bbox_inches='tight', pad_inches=0.0)
 
 
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
@@ -493,7 +493,7 @@ plt.savefig('TOI-5349-b_RV_phase_plot_06-10-2024.pdf',bbox_inches='tight', pad_i
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 
 NSteps = 10000
-Nchains = 10
+Nchains = 8
 Ncores = 4 
 with model:
 
@@ -512,7 +512,7 @@ with model:
 # ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
 # ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
 
-pickle.dump([map_soln, trace], open('TOI-5349_05-03-24_2.pkl','wb')) 
+pickle.dump([map_soln, trace], open('TOI-5349_06-14-2024_2.pkl','wb')) 
 
 
 # ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
@@ -534,13 +534,13 @@ az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
 ### TRACE PLOT ###
 _ = az.plot_trace(trace, var_names = var_names) 
 
-plt.savefig('TOI-5349_trace_plot_06-10-2024.pdf',bbox_inches='tight', pad_inches=0.0)
+plt.savefig('TOI-5349_trace_plot_06-14-2024.pdf',bbox_inches='tight', pad_inches=0.0)
 
 ### CORNER PLOT ###
 with model:
     _ = corner.corner(trace, var_names = var_names)
 
-plt.savefig('TOI-5349_corner_plot_06-10-24.pdf',bbox_inches='tight', pad_inches=0.0)
+plt.savefig('TOI-5349_corner_plot_06-14-24.pdf',bbox_inches='tight', pad_inches=0.0)
 
 
 # 'blurgb_{}'.format(myappendix_name)

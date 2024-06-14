@@ -180,7 +180,7 @@ with pm.Model() as model:
     ror = pm.Uniform("ror", lower=0.01, upper = 0.99, shape=nplanets) # Radius ratio
     r_pl = pm.Deterministic("r_pl", ror*r_star) #in physical units aka stellar radii #not a free parameter but you can calculate at every step
     pm.Deterministic("r_jup", r_pl*Rsun2Rjup)
-    m_pl = pm.Uniform("m_pl", lower = 0.1, upper = 1000, testval=Expected_msini, shape=nplanets)
+    m_pl = pm.Uniform("m_pl", lower = 0.01, upper = 1000, testval=Expected_msini, shape=nplanets)
     # pm.Deterministic("m_jup", m_pl*MSun2MJup)
     density_pl = pm.Deterministic("density_pl", m_pl*MSun2MEarth/((r_pl*Rsun2Rearth)**3) * 5.514) # Convert from rho_earth to g/cm3
     
@@ -198,8 +198,8 @@ with pm.Model() as model:
     # Set up the Orbit Model   
     orbit = xo.orbits.KeplerianOrbit(r_star = r_star, m_star= m_star, 
                                      period = period, t0 = t0, b = b, 
-                                     ecc = ecc, omega = omega, m_planet = xo.units.with_unit(m_pl, u.M_sun))
-                                     #m_planet_units = u.M_sun)
+                                     ecc = ecc, omega = omega, m_planet = m_pl,
+                                     m_planet_units = u.M_jup)
     # Stellar Density recovered from the transit
     pm.Deterministic("rho_star", orbit.rho_star)
     # Ratio of semi-major axis 
@@ -208,7 +208,7 @@ with pm.Model() as model:
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
-
+    #pdb.set_trace()
     # Prior for Semi-Amplitude
     K = pm.Deterministic("K0", orbit.K0 * orbit.m_planet * RsunPerDay)
     # K = pm.Uniform(
@@ -375,7 +375,7 @@ for thiskey in list(map_soln.keys())[:-1]:
     print('{}: {}'.format(thiskey, map_soln[thiskey]))
 
 
-
+#pdb.set_trace()
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ################## 
@@ -487,7 +487,7 @@ plt.xlabel("phase [days]")
 plt.legend()
 plt.savefig('TOI-5349-b_RV_phase_plot_06-14-2024.pdf',bbox_inches='tight', pad_inches=0.0)
 
-
+pdb.set_trace()
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########

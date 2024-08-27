@@ -1,3 +1,4 @@
+import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash
 import lightkurve as lk
 import numpy as np
 import exoplanet as xo
@@ -9,6 +10,7 @@ import aesara_theano_fallback.tensor as tt
 from celerite2.theano import terms, GaussianProcess
 import starry
 import pdb
+import datetime
 from astropy import constants as const
 from astropy import units as u
 import corner
@@ -30,15 +32,14 @@ t_lc = np.linspace(time_lc.min() - 5, time_lc.max() + 5, 5000)
 flux = tess_data['flux'].values
 flux_error = tess_data['flux_err'].values
 mask = (time_lc < 2481.4) | (time_lc > 2481.9)
+
 plt.figure()
 plt.plot(time_lc[mask], flux[mask], linestyle = 'none', color = 'k', marker = '.', ms = 1)
-# plt.xlim(2500, 2600)
-# plt.xlim(2478, 2500)
-# plt.ylim(0.9, 1.1)
-
 plt.ylabel("relative flux")
 plt.xlabel("time [days]")
 plt.title('TESS Photometry of TOI-5349')
+# plt.savefig('tess_lc1.png',bbox_inches='tight', pad_inches=0.0)
+# plt.close()
 
 plt.figure()
 plt.plot(time_lc, flux, color = 'k', marker = ".", ms = 1, linestyle = 'none')
@@ -47,7 +48,8 @@ plt.xlim(3205, 3235)
 plt.ylabel("relative flux")
 plt.xlabel("time [days]")
 plt.title('TESS Photometry of TOI-5349')
-
+# plt.savefig('tess_lc2.png',bbox_inches='tight', pad_inches=0.0)
+# plt.close()
 
 tess_time_offset = 2457000
 kepler_time_offset = 2454833
@@ -114,17 +116,12 @@ for n_instrument in np.unique(instrument):
 plt.title('Radial Velocity Data')
 plt.xlabel("time [days]")
 plt.ylabel("radial velocity [m/s]")
-#plt.legend()
-# plt.savefig('Transit-data')
+plt.savefig('radial_velocities.png',bbox_inches='tight', pad_inches=0.0)
+plt.close()
+print('all plots are done')
 
-phase = phaseup(mx_blue_time, 2521.81748925, 3.31793068)
-
-plt.plot(phase, mx_blue_rad_vel, linestyle = 'none', marker = '.')
-# plt.xlim(-0.1, 0.1)
-
-
-# print(map_soln['vrad'].shape)
-# print(np.sum(vrad, axis=-1))
+# phase = phaseup(mx_blue_time, 2521.81748925, 3.31793068)
+# plt.plot(phase, mx_blue_rad_vel, linestyle = 'none', marker = '.')
 
 
 ################## THE MODEL #################### THE MODEL #################### THE MODEL ################## THE MODEL ##################
@@ -155,7 +152,7 @@ Rsun2AU = u.Rsun.to('au')
 Rsun2Rjup = u.Rsun.to('Rjup')
 MJup2MSun = u.Mjup.to('Msun')
 MSun2MJup = u.Msun.to('Mjup')
-MSun2MEarth =  u.Msun.to('Mearth')
+MSun2MEarth = u.Msun.to('Mearth')
 
 # For the Radial Velocity Model
 Ks = xo.estimate_semi_amplitude(periods, time, rad_vel, rv_err, t0s = t0s)
@@ -182,21 +179,21 @@ with pm.Model() as model:
     pm.Deterministic("r_jup", r_pl*Rsun2Rjup)
     m_pl = pm.Uniform("m_pl", lower = 0.01, upper = 1000, testval=Expected_msini, shape=nplanets)
     # pm.Deterministic("m_jup", m_pl*MSun2MJup)
-    density_pl = pm.Deterministic("density_pl", m_pl*MSun2MEarth/((r_pl*Rsun2Rearth)**3) * 5.514) # Convert from rho_earth to g/cm3
+    density_pl = pm.Deterministic("density_pl", m_pl*Mjup2Mearth/((r_pl*Rsun2Rearth)**3) * 5.514) # Convert from rho_earth to g/cm3
     
     # Orbital Parameters
-    period = pm.Normal("period", mu = np.array(periods), sigma= np.array(period_error), shape=nplanets)
-    t0 = pm.Normal("t0", mu=t0s, sigma=np.array(t0_error), shape=nplanets)
-    b = pm.Uniform("b", lower = 0, upper = 1, shape=nplanets, testval = np.array([0.9]))
+    period = pm.Normal("period", mu = np.array(periods), sigma = np.array(period_error), shape = nplanets)
+    t0 = pm.Normal("t0", mu = t0s, sigma = np.array(t0_error), shape = nplanets)
+    b = pm.Uniform("b", lower = 0, upper = 1, shape = nplanets, testval = np.array([0.9]))
 
     #Here are definining our eccentric model
     #Look at section 17 for more information on sampling eccentricity vs. omega on a UnitDisk (https://arxiv.org/pdf/1907.09480.pdf)
-    ecs = pmx.UnitDisk("ecs", testval=np.array([[0.1, 0.1]] * nplanets).T, shape=(2, nplanets))
-    ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis=0))
+    ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
+    ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
     omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
     
     # Set up the Orbit Model   
-    orbit = xo.orbits.KeplerianOrbit(r_star = r_star, m_star= m_star, 
+    orbit = xo.orbits.KeplerianOrbit(r_star = r_star, m_star = m_star, 
                                      period = period, t0 = t0, b = b, 
                                      ecc = ecc, omega = omega, m_planet = m_pl,
                                      m_planet_units = u.M_jup)
@@ -210,17 +207,17 @@ with pm.Model() as model:
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #pdb.set_trace()
     # Prior for Semi-Amplitude
-    K = pm.Deterministic("K0", orbit.K0 * orbit.m_planet * RsunPerDay)
+    K = pm.Deterministic("K", orbit.K0 * orbit.m_planet * RsunPerDay)
     # K = pm.Uniform(
     #     "K", lower = 1, upper = 1000, shape = nplanets)
     
     #Jitter & a baseline for now RV trend each instrument will have its own rv offset aka trend
     RVOffset = pm.Normal("RVOffset",
-                         mu=np.array([0]*len(merged_data.instrument.unique())), 
-                         sigma=20000, 
-                         shape=len(merged_data.instrument.unique()),) #offset relative to each instrument
+                         mu = np.array([0]*len(merged_data.instrument.unique())), 
+                         sigma = 20000, 
+                         shape = len(merged_data.instrument.unique()),) #offset relative to each instrument
     
-    RVJitter = pm.Uniform("RVJitter", 1e-3,1e3, shape=len(merged_data.instrument.unique())) #adding additional noise
+    RVJitter = pm.Uniform("RVJitter", 1e-3, 1e3, shape = len(merged_data.instrument.unique())) #adding additional noise
     
     RVMean = tt.zeros(merged_data.shape[0])
     RVError = tt.zeros(merged_data.shape[0])
@@ -233,7 +230,7 @@ with pm.Model() as model:
     pm.Deterministic("RVError", RVError)
 
     # A function for computing the full RV model
-    def get_rv_model(t, name=""):
+    def get_rv_model(t, name = ""):
         
         # First the RVs induced by the planets
         vrad = orbit.get_radial_velocity(t, K = K) #the individual planet rv curves
@@ -241,7 +238,7 @@ with pm.Model() as model:
         
         if nplanets > 1:
             # Sum over planets and add the background to get the full model
-            return pm.Deterministic("rv_model" + name, tt.sum(vrad, axis=-1)) # depending on shape of v rad but should change....
+            return pm.Deterministic("rv_model" + name, tt.sum(vrad, axis = -1)) # depending on shape of v rad but should change....
         else:
             return pm.Deterministic("rv_model" + name, vrad)
     
@@ -249,7 +246,7 @@ with pm.Model() as model:
     rv_model = get_rv_model(time) # For all 3 instruments #rv model was the sum of multiple planets
 
     # Define the model on a fine grid as computed above (for plotting purposes)
-    rv_model_pred = get_rv_model(t, name="_pred")
+    rv_model_pred = get_rv_model(t, name = "_pred")
 
     # Saving the time for RV model
     # pm.Deterministic("RVmodeltime", t)
@@ -266,7 +263,7 @@ with pm.Model() as model:
     star = xo.LimbDarkLightCurve(ustar)
     
     # Calculates light curve for each planet at its time vector
-    light_curves = star.get_light_curve(orbit=orbit, 
+    light_curves = star.get_light_curve(orbit = orbit, 
                                         r = r_pl, 
                                         t = time_lc,
                                         # Change texp to match your data set
@@ -275,7 +272,7 @@ with pm.Model() as model:
     # Saves the individual lightcurves 
     pm.Deterministic("light_curves", light_curves) 
 
-    hi_cad_light_curves = star.get_light_curve(orbit=orbit, 
+    hi_cad_light_curves = star.get_light_curve(orbit = orbit, 
                                         r = r_pl, 
                                         t = t_lc,
                                         # Change texp to match your data set
@@ -288,7 +285,7 @@ with pm.Model() as model:
     # pm.Deterministic("LCmodeltime", t_lc)
     
     # Full photometric model, the sum of all transits + the baseline (mean)
-    lc_model = mean + tt.sum(light_curves, axis=-1)
+    lc_model = mean + tt.sum(light_curves, axis = -1)
     
     # The likelihood function assuming known Gaussian uncertainty
     pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
@@ -391,14 +388,15 @@ vrad_pred = map_soln["vrad_pred"]
 
 ### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ########################
 ### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ########################
+
+datelabel = "{:%m-%d-%Y}".format(datetime.datetime.now())
 with model:
-    fig, axes = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize = (10, 5), sharex = True)
     ax = axes[0]
-    ax.errorbar(time, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt=".k")
-    ax.plot(t, vrad_pred, "--k", alpha= 0.5) 
+    ax.errorbar(time, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt = ".k")
+    ax.plot(t, vrad_pred, "--k", alpha = 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad_pred), "--k", alpha= 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad), ":k", alpha= 0.5) 
-
 
     ax.set_title("initial model")
     ax.set_ylabel("radial velocity [m/s]")
@@ -409,102 +407,102 @@ with model:
 
 
     ax = axes[1]
-    ax.errorbar(time, rad_vel - map_soln['RVMean']- map_soln["rv_model"], yerr = rv_err, fmt=".k")
-    ax.axhline(0, color="k", lw=1)
+    ax.errorbar(time, rad_vel - map_soln['RVMean'] - map_soln["rv_model"], yerr = rv_err, fmt = ".k")
+    ax.axhline(0, color = "k", lw = 1)
     ax.set_title("residuals")
     ax.set_ylabel("residuals [m/s]")
     # ax.set_xlim(3230, 3250)
     ax.set_xlabel("time [days]")
-    ax.figure.savefig('TOI-5349-b_residuals_plot_06-14-2024.pdf', bbox_inches='tight', pad_inches=0.0)
-
+    ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 # print(np.unique(map_soln['RVMean'])) 
 # print(map_soln['RVOffset'])
 
 
 ### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ##################### 
-### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ##################### 
-fig, ax = plt.subplots(figsize=(10, 5))
+### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT #####################
+
+fig, ax = plt.subplots(figsize = (10, 5))
 
 x_fold = (time_lc - t0 + 0.5 * period) % period - 0.5 * period
 m = np.abs(x_fold) < 0.5 # plot will only show phases between -0.5 to 0.5
 
 ax.scatter(x_fold[m], 1e3 * (flux[m]), #*******
-    c="k",
-    marker=".",
-    alpha=0.2,
-    linewidths=0,
+    c = "k",
+    marker = ".",
+    alpha = 0.2,
+    linewidths = 0,
 )
 
 lc_mod = map_soln['light_curves']
 lc_modx = np.sort(x_fold)
 lc_mody = lc_mod[np.argsort(x_fold)]
 
-ax.plot(lc_modx, 1e3 * (lc_mody + map_soln["mean"]), c="purple", zorder=1) #*******
+ax.plot(lc_modx, 1e3 * (lc_mody + map_soln["mean"]), c = "purple", zorder = 1) #*******
 
 # Overplot the phase binned light curve
 bins = np.linspace(-0.51, 0.51, 100)
 denom, _ = np.histogram(x_fold, bins)
-num, _ = np.histogram(x_fold, bins, weights= flux)
+num, _ = np.histogram(x_fold, bins, weights = flux)
 denom[num == 0] = 1.0
 
 ax.scatter(0.5 * (bins[1:] + bins[:-1]), 1e3 * num / denom, #*******
-    color="C1",
-    zorder=2,
-    linewidths=0,
+    color = "C1",
+    zorder = 2,
+    linewidths = 0,
 )
 
 ax.set_xlim(-0.5, 0.5)
 ax.set_ylabel("de-trended flux [ppt]")
 _ = ax.set_xlabel("time since transit")
 
-ax.figure.savefig('TOI-5349-b_LC_phase_plot_06-14-2024.pdf', bbox_inches='tight', pad_inches=0.0)
+ax.figure.savefig('TOI-5349-b_LC_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 
 
 
 ### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###
 ### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize = (10, 5))
 
 rv_xfold = (time - t0 + 0.5 * period) % period - 0.5 * period # stacking everything by 1 period and then shifting reference point to 0
-plt.errorbar(rv_xfold, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt=".k", label="data")
+plt.errorbar(rv_xfold, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt = ".k", label = "data")
 
-ax.scatter(rv_xfold, rad_vel-map_soln["RVMean"],
-    c="k",
-    marker=".",
-    alpha=0.2,
-    linewidths=0,
+ax.scatter(rv_xfold, rad_vel - map_soln["RVMean"],
+    c = "k",
+    marker = ".",
+    alpha = 0.2,
+    linewidths = 0,
 )
 
-t_fold = (t- t0 + 0.5 * period) % period - 0.5 * period
+t_fold = (t - t0 + 0.5 * period) % period - 0.5 * period
 rv_modx = np.sort(t_fold)
 rv_mody = vrad_pred[np.argsort(t_fold)]
 
-plt.plot(rv_modx, rv_mody, c="purple", zorder = 1, label = 'model') 
+plt.plot(rv_modx, rv_mody, c = "purple", zorder = 1, label = 'model') 
 plt.xlim(-0.5 * period, 0.5 * period)
 plt.title("TOI-5349b")
 plt.ylabel("radial velocity [ms/s]")
 plt.xlabel("phase [days]")
 plt.legend()
-plt.savefig('TOI-5349-b_RV_phase_plot_06-14-2024.pdf',bbox_inches='tight', pad_inches=0.0)
+plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 #pdb.set_trace()
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 
-NSteps = 10000
-Nchains = 8
-Ncores = 4 
+NSteps = 1000
+Nchains = 3
+Ncores = 1
 with model:
 
     trace = pmx.sample(
-        tune=NSteps,
-        draws= int(NSteps/2),
-        start=map_soln,
+        tune = NSteps,
+        draws = int(NSteps/2),
+        start = map_soln,
         cores = Ncores,
         chains = Nchains,
-        target_accept=0.95,
-        return_inferencedata=True,
+        target_accept = 0.95,
+        return_inferencedata = True,
     )
 
 
@@ -512,17 +510,31 @@ with model:
 # ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
 # ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
 
-pickle.dump([map_soln, trace], open('TOI-5349_06-14-2024_2.pkl','wb')) 
-
-
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
+flat_samps = trace.posterior.stack(sample = ("chain", "draw"))
 
 var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Traditional RV Paramters
              'u', "ror", 'aor', 'b', # The transit parameters
              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The Physical Stellar Parameters
              'm_pl', 'r_jup',  'density_pl'] # The Planetary Parameters 
+
+output_dict = {'time_lc' : time_lc, #Save photometry
+               'lc' : flux,
+               'lc_err' : flux_error,
+               'time_rv' : time,
+               'rv' : rad_vel,      #Save RV
+               'rv_err' : rv_err,
+               'rv_instrument' : instrument,
+               "map_solution" : map_soln, #Save solution
+               "trace" : trace,
+               "var_names" : var_names,
+               "flat_samples" : flat_samps}
+
+with open('TOI-5349_{}.pkl'.format(datelabel), 'wb') as f:
+    pickle.dump(output_dict, f)
+
+# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
+# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
+# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
 
 # percentile_86 = np.percentile(trace, 86)
 az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
@@ -532,48 +544,174 @@ az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
 ################ GENERATING CORNER + TRACE PLOTS ################# GENERATING CORNER + TRACE PLOTS ################## GENERATING CORNER + TRACE PLOTS #######
 
 ### TRACE PLOT ###
+
 _ = az.plot_trace(trace, var_names = var_names) 
 
-plt.savefig('TOI-5349_trace_plot_06-14-2024.pdf',bbox_inches='tight', pad_inches=0.0)
+plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 ### CORNER PLOT ###
+
 with model:
     _ = corner.corner(trace, var_names = var_names)
 
-plt.savefig('TOI-5349_corner_plot_06-14-24.pdf',bbox_inches='tight', pad_inches=0.0)
-
-
-# 'blurgb_{}'.format(myappendix_name)
-# myappendix_name = '05-03-24'
-
+plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 ### STEPS TO READ PKL FILE AND VIEW FIT RESULTS ###
 
 # To read in pkl file:
-# map_soln, trace = pickle.load(open('TOI-5349_05-03-24_1.pkl','rb'))
 
-# var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Traditional RV paramters
-#              'u', "ror", 'aor', 'b', # The transit parameters
-#              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The physical stellar parameters
-#              'm_pl', 'r_jup',  'density_pl'] # The planetary parameters 
+# import pickle
+# import glob
 
+# with open( glob.glob('TOI*pkl')[0], 'rb') as f:
+#     output_dict = pickle.load(f)
+#     map_soln = output_dict['map_solution']
+#     flat_samps = output_dict['flat_samples']
+#     time_lc = output_dict['time_lc']
+#     flux = output_dict['lc']
+#     flux_error = output_dict['lc_err']
+#     time_rv = output_dict['time_rv']
+#     rv = output_dict['rv']
+#     rv_error = output_dict['rv_err']
+#     rv_instrument = output_dict['rv_instrument']
 
-# az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian}) # NEED TO UPDATE ARVIZ TABLE WITH CORRECT PERCENTILES 
-
-# az.plot_trace(trace, var_names = var_names)
-# # plt.savefig('trace_plot.pdf',bbox_inches='tight', pad_inches=0.0)
-
-# samples = trace.to_dataframe() # worked
-
-# corner.corner(samples.loc[:,samples.columns.values[2:]], quantiles=[0.16, 0.5, 0.84], show_titles=True, 
-#     title_kwargs={"fontsize": 12}, use_math_text=True)
-
-
-
+# with open( glob.glob('TOI*pkl')[0], 'rb') as f:
+#     output_dict = pickle.load(f)
+#     map_soln = output_dict['map_solution']
+#     flat_samps = output_dict['flat_samples']
+#     time_lc = output_dict['time_lc']
+#     flux = output_dict['lc']
+#     flux_error = output_dict['lc_err']
+#     x_rv = output_dict['time_rv']
+#     y_rv = output_dict['rv']
+#     yerr_rv = output_dict['rv_err']
+#     rv_instrument = output_dict['rv_instrument']
+#     map_soln =   output_dict['map_solution']
 
 ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ###########
 ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ###########
 ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ###########
+
+gp_mod=np.zeros(len(time_lc))
+
+
+# ######## TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS #####################
+
+for n, letter in enumerate("b"):
+
+    plt.figure()
+
+    plt.gca().tick_params(direction = "in", which = 'both',bottom = True, top = False, left = True, right = True)
+    # Get the posterior median orbital parameters
+    p = np.median(flat_samps["period"][n])
+    t0 = np.median(flat_samps["t0"][n])
+    
+
+    # Plot the folded data
+    x_fold = (time_lc - t0 + 0.5 * p) % p - 0.5 * p
+    m = (np.abs(x_fold) < 0.3) &(flux < 1.05)
+    plt.plot(
+        x_fold[m], flux[m] - gp_mod[m], ".k", label = "data", zorder = -1000)
+
+    # Plot the folded model
+    pred = np.percentile(flat_samps["light_curves"][:, n, :], [16, 50, 84], axis = -1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
+    pred +=1
+    sort=np.argsort(x_fold)
+    plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model")
+    art = plt.fill_between(
+        x_fold[sort], pred[0][sort], pred[2][sort], color = "C1", alpha = 0.5, zorder = 1000
+    )
+    art.set_edgecolor("none")
+
+    # Annotate the plot with the planet's period
+    txt = "period = {0:.4f} +/- {1:.4f} d".format(
+        np.mean(flat_samps["period"][n].values),
+        np.std(flat_samps["period"][n].values),
+    )
+    plt.annotate(
+        txt,
+        (0, 0),
+        xycoords = "axes fraction",
+        xytext = (5, 5),
+        textcoords = "offset points",
+        ha = "left",
+        va = "bottom",
+        fontsize = 12,
+    )
+
+    plt.legend(fontsize = 10, loc = 4)
+    plt.xlabel("time since transit [days]")
+    plt.ylabel("de-trended flux")
+    plt.title("TOI-5349{0}".format(letter))
+    plt.xlim(-0.3, 0.3)
+    plt.show()
+
+
+
+######## RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ######################
+
+for n, letter in enumerate("b"):
+    plt.figure()
+    plt.gca().tick_params(direction = "in", which='both',bottom = True, top = False, left = True, right = True)
+
+    # Get the posterior median orbital parameters
+    p = np.median(flat_samps["period"][n])
+    t0 = np.median(flat_samps["t0"][n])
+
+    # Compute the median of posterior estimate of the background RV
+    # and the contribution from the other planet. Then we can remove
+    # this from the data to plot just the planet we care about.
+    bkg = map_soln["RVMean"]
+    
+    # Plot the folded data
+    x_fold = (x_rv - t0 + 0.5 * p) % p - 0.5 * p
+    # plt.errorbar(x_fold, y_rv -bkg, yerr=yerr_rv, fmt=".k", label="data")
+    for thisinstrument in pd.Series(rv_instrument).unique():
+        mask = rv_instrument == thisinstrument
+        plt.errorbar(x_fold[mask], (y_rv - bkg)[mask], yerr = yerr_rv[mask], marker = 'o', linestyle = 'none', ecolor=rgba('black',0.2),markeredgecolor=rgba('black',0.2), label="{}".format(thisinstrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)')))
+        plt.tick_params(axis = 'both',which = 'major', width = 1.00, length = 5)
+        plt.tick_params(axis = 'both', which ='minor', direction ='in', length = 4, width = 1)
+        
+
+    # Compute the posterior prediction for the folded RV model for this
+    # planet
+    t_rv = np.linspace(x_rv.min() - 5, x_rv.max() + 5, 5000)
+    t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
+    inds = np.argsort(t_fold)
+    bkg = np.median(flat_samps['RVMean'],axis=1)
+    pred = np.percentile(flat_samps["rv_model_pred"][inds,:], [16, 50, 84], axis=-1)
+    plt.plot(t_fold[inds], pred[1], color="C1", label="model")
+    art = plt.fill_between(
+        t_fold[inds], pred[0], pred[2], color="C1", alpha=0.3
+    )
+    art.set_edgecolor("none")
+
+    plt.legend(fontsize=10)
+    plt.xlim(-0.5 * p, 0.5 * p)
+    plt.xlabel("phase [days]")
+    plt.ylabel("radial velocity [m/s]")
+    
+    def phasetodays(x):
+        return x*p
+    def daystophase(x):
+        return x / p
+    secax = plt.gca().secondary_xaxis('top', functions=(daystophase, phasetodays))
+    secax.set_xlabel('phase')
+
+
+    plt.legend(fontsize=10)
+    plt.xlabel("phase [days]")
+    plt.ylabel("radial velocity [m/s]")
+    plt.title("TOI-5349 {}".format(letter))
+
+    plt.show()
+
+############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
+############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
+############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
+############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
+############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
+
 
 # flat_samps = trace.posterior.stack(sample=("chain", "draw"))
 

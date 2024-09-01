@@ -116,9 +116,9 @@ for n_instrument in np.unique(instrument):
 plt.title('Radial Velocity Data')
 plt.xlabel("time [days]")
 plt.ylabel("radial velocity [m/s]")
-plt.savefig('radial_velocities.png',bbox_inches='tight', pad_inches=0.0)
-plt.close()
-print('all plots are done')
+# plt.savefig('radial_velocities.png',bbox_inches='tight', pad_inches=0.0)
+# plt.close()
+# print('all plots are done')
 
 # phase = phaseup(mx_blue_time, 2521.81748925, 3.31793068)
 # plt.plot(phase, mx_blue_rad_vel, linestyle = 'none', marker = '.')
@@ -197,15 +197,41 @@ with pm.Model() as model:
                                      period = period, t0 = t0, b = b, 
                                      ecc = ecc, omega = omega, m_planet = m_pl,
                                      m_planet_units = u.M_jup)
+
     # Stellar Density recovered from the transit
     pm.Deterministic("rho_star", orbit.rho_star)
+
     # Ratio of semi-major axis 
-    pm.Deterministic("aor", orbit.a / r_star)
+    aor = pm.Deterministic("aor", orbit.a / r_star)
+
+    # Add semi-major axis in AU
+    pm.Deterministic("semimajoraxis", orbit.a * Rsun2AU)
+
+    # Add orbital inclination
+    pm.Deterministic("inclination", orbit.incl)
+
+    # Add time of periastron
+    pm.Deterministic("t_p", orbit.t_periastron)
+
+    # Add transit duration, see Eq 14 & 16 here: https://ui.adsabs.harvard.edu/abs/2010exop.book...55W/abstract, Shubham wrote these for the below for his code
+    sin_incl = pm.Deterministic("sin_incl", tt.sqrt(1 - orbit.cos_incl**2))
+
+    EccentricityMultiplicativeFactor = pm.Deterministic("X", tt.sqrt(1-(ecc**2))/(1+ecc*tt.sin(omega))) # Eq 16
+
+    pm.Deterministic("transit_duration", (period/np.pi) * tt.arcsin( tt.sqrt( (1+ror)**2 - b**2 ) / (aor*sin_incl) ) * EccentricityMultiplicativeFactor )
+
+    # Add equilibrium temperature
+    pm.Deterministic("equilibrium_temp", teff * tt.sqrt(1/(2*aor)))
+
+    # Add temporally the avergaed insolation flux in units of W/m2, see Eq 14 https://arxiv.org/pdf/1702.07314, 
+    # luminsity is a black body or L = 4*pi*rstar^2*sigmab*teff^4
+    pm.Deterministic("insolation_flux", 4 * np.pi * const.sigma_sb.to('W m-2 K-4').value * teff**4 / (aor**2 * tt.sqrt(1e0 - ecc**2)))
 
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #################### RV MODEL #################### RV MODEL #################### RV MODEL #####################
     #pdb.set_trace()
+
     # Prior for Semi-Amplitude
     K = pm.Deterministic("K", orbit.K0 * orbit.m_planet * RsunPerDay)
     # K = pm.Uniform(
@@ -491,7 +517,7 @@ plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 't
 # ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
 
 NSteps = 1000
-Nchains = 3
+Nchains = 2
 Ncores = 1
 with model:
 
@@ -537,7 +563,13 @@ with open('TOI-5349_{}.pkl'.format(datelabel), 'wb') as f:
 # ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
 
 # percentile_86 = np.percentile(trace, 86)
-az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
+posteriors  = az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
+# data = az.extract(posteriors)
+posteriors_df = pd.DataFrame(posteriors)
+# print(posteriors_df)
+posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
+
+# pdb.set_trace()
 
 ################ GENERATING CORNER + TRACE PLOTS ################# GENERATING CORNER + TRACE PLOTS ################## GENERATING CORNER + TRACE PLOTS #######
 ################ GENERATING CORNER + TRACE PLOTS ################# GENERATING CORNER + TRACE PLOTS ################## GENERATING CORNER + TRACE PLOTS #######
@@ -552,9 +584,19 @@ plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight'
 ### CORNER PLOT ###
 
 with model:
-    _ = corner.corner(trace, var_names = var_names)
+    # _ = corner.corner(trace, var_names = var_names)
+    _ = corner.corner(
+        trace, 
+        var_names = var_names, 
+        quantiles=[0.16, 0.5, 0.84], 
+        show_titles=True, 
+        title_kwargs={"fontsize": 12}, 
+        use_math_text=True
+        )
 
 plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+
+# pdb.set_trace()
 
 ### STEPS TO READ PKL FILE AND VIEW FIT RESULTS ###
 
@@ -595,7 +637,7 @@ plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight
 gp_mod=np.zeros(len(time_lc))
 
 
-# ######## TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS #####################
+######## TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS #####################
 
 for n, letter in enumerate("b"):
 
@@ -673,8 +715,7 @@ for n, letter in enumerate("b"):
         plt.tick_params(axis = 'both', which ='minor', direction ='in', length = 4, width = 1)
         
 
-    # Compute the posterior prediction for the folded RV model for this
-    # planet
+    # Compute the posterior prediction for the folded RV model for this planet
     t_rv = np.linspace(x_rv.min() - 5, x_rv.max() + 5, 5000)
     t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
     inds = np.argsort(t_fold)
@@ -907,6 +948,3 @@ plt.title("TOI-5349b")
 # dir(trace) # to check what commands are available for trace
 
 # samples = trace.to_dataframe(trace, varnames=var_names)
-
-# corner.corner(samples, quantiles=[0.16, 0.5, 0.84],
-# show_titles=True, title_kwargs={"fontsize": 12}, use_math_text=True)

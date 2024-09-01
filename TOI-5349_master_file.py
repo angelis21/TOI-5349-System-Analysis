@@ -24,6 +24,8 @@ az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generati
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 
 ### PHOTOMETRY DATA ###
+### PHOTOMETRY DATA ###
+### PHOTOMETRY DATA ###
 tess_data = pd.read_csv('TOI-5349_stitched_data.csv')
 
 time_lc = tess_data['time'].values
@@ -70,7 +72,8 @@ phase = phaseup(time_lc, 2521.81748925, 3.31793068)
 plt.plot(phase, flux, linestyle = 'none', marker = '.')
 plt.xlim(-0.1, 0.1)
 
-
+### RADIAL VELOCITY DATA ###
+### RADIAL VELOCITY DATA ###
 ### RADIAL VELOCITY DATA ###
 mx_red_data = pd.read_csv('TOI-5349_rv_bin_MAROONX_red.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
@@ -385,7 +388,6 @@ with pm.Model() as model:
     map_soln = pmx.optimize(map_soln)
 
 
-
 ################ THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ######
 ################ THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ######
 ################ THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ######
@@ -411,9 +413,9 @@ rv_model_pred = map_soln["rv_model_pred"]
 vrad = map_soln["vrad"]
 vrad_pred = map_soln["vrad_pred"]
 
-
-### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ########################
-### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ########################
+################ RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT #############
+################ RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT #############
+################ RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT ######### RV RESIDUALS PLOT #############
 
 datelabel = "{:%m-%d-%Y}".format(datetime.datetime.now())
 with model:
@@ -444,8 +446,9 @@ with model:
 # print(map_soln['RVOffset'])
 
 
-### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ##################### 
-### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT ###### LC PHASE PLOT #####################
+###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
+###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
+###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
 
 fig, ax = plt.subplots(figsize = (10, 5))
 
@@ -484,9 +487,10 @@ _ = ax.set_xlabel("time since transit")
 ax.figure.savefig('TOI-5349-b_LC_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 
 
+###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
+###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
+###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
 
-### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###
-### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###### RV PHASE PLOT ###
 fig, ax = plt.subplots(figsize = (10, 5))
 
 rv_xfold = (time - t0 + 0.5 * period) % period - 0.5 * period # stacking everything by 1 period and then shifting reference point to 0
@@ -512,9 +516,10 @@ plt.legend()
 plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 #pdb.set_trace()
-# ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
-# ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
-# ################ SAMPLING THE DATA ################## SAMPLING THE DATA ################## SAMPLING THE DATA ##########
+
+############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
+############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
+############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 
 NSteps = 1000
 Nchains = 2
@@ -532,9 +537,9 @@ with model:
     )
 
 
-# ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
-# ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
-# ################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
+################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
+################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
+################ SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT ################## SAVING THE MCMC OUTPUT #######################
 
 flat_samps = trace.posterior.stack(sample = ("chain", "draw"))
 
@@ -558,9 +563,9 @@ output_dict = {'time_lc' : time_lc, #Save photometry
 with open('TOI-5349_{}.pkl'.format(datelabel), 'wb') as f:
     pickle.dump(output_dict, f)
 
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
-# ################ CHECKING STATUS OF CONVERGENCE ################## CHECKING STATUS OF CONVERGENCE ###########################################
+############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
+############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
+############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
 
 # percentile_86 = np.percentile(trace, 86)
 posteriors  = az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
@@ -576,11 +581,15 @@ posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
 ################ GENERATING CORNER + TRACE PLOTS ################# GENERATING CORNER + TRACE PLOTS ################## GENERATING CORNER + TRACE PLOTS #######
 
 ### TRACE PLOT ###
+### TRACE PLOT ###
+### TRACE PLOT ###
 
 _ = az.plot_trace(trace, var_names = var_names) 
 
 plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
+### CORNER PLOT ###
+### CORNER PLOT ###
 ### CORNER PLOT ###
 
 with model:
@@ -636,8 +645,9 @@ plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight
 
 gp_mod=np.zeros(len(time_lc))
 
-
-######## TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS #####################
+######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
+######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
+######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
 
 for n, letter in enumerate("b"):
 
@@ -661,7 +671,12 @@ for n, letter in enumerate("b"):
     sort=np.argsort(x_fold)
     plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model")
     art = plt.fill_between(
-        x_fold[sort], pred[0][sort], pred[2][sort], color = "C1", alpha = 0.5, zorder = 1000
+        x_fold[sort], 
+        pred[0][sort], 
+        pred[2][sort], 
+        color = "C1", 
+        alpha = 0.5, 
+        zorder = 1000
     )
     art.set_edgecolor("none")
 
@@ -688,9 +703,9 @@ for n, letter in enumerate("b"):
     plt.xlim(-0.3, 0.3)
     plt.show()
 
-
-
-######## RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ######################
+######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
+######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
+######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
 
 for n, letter in enumerate("b"):
     plt.figure()
@@ -710,11 +725,18 @@ for n, letter in enumerate("b"):
     # plt.errorbar(x_fold, y_rv -bkg, yerr=yerr_rv, fmt=".k", label="data")
     for thisinstrument in pd.Series(rv_instrument).unique():
         mask = rv_instrument == thisinstrument
-        plt.errorbar(x_fold[mask], (y_rv - bkg)[mask], yerr = yerr_rv[mask], marker = 'o', linestyle = 'none', ecolor=rgba('black',0.2),markeredgecolor=rgba('black',0.2), label="{}".format(thisinstrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)')))
+        plt.errorbar(
+            x_fold[mask], (y_rv - bkg)[mask], 
+            yerr = yerr_rv[mask], 
+            marker = 'o', 
+            linestyle = 'none', 
+            ecolor=rgba('black',0.2),
+            markeredgecolor=rgba('black',0.2),
+            label="{}".format(thisinstrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)'))
+            )
         plt.tick_params(axis = 'both',which = 'major', width = 1.00, length = 5)
         plt.tick_params(axis = 'both', which ='minor', direction ='in', length = 4, width = 1)
         
-
     # Compute the posterior prediction for the folded RV model for this planet
     t_rv = np.linspace(x_rv.min() - 5, x_rv.max() + 5, 5000)
     t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
@@ -739,212 +761,12 @@ for n, letter in enumerate("b"):
     secax = plt.gca().secondary_xaxis('top', functions=(daystophase, phasetodays))
     secax.set_xlabel('phase')
 
-
     plt.legend(fontsize=10)
     plt.xlabel("phase [days]")
     plt.ylabel("radial velocity [m/s]")
     plt.title("TOI-5349 {}".format(letter))
-
     plt.show()
 
-############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
-############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
-############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
-############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
-############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE ############# IGNORE
-
-
-# flat_samps = trace.posterior.stack(sample=("chain", "draw"))
-
-# gp_mod = map_soln["gp_pred"] + map_soln["mean"]
-
-
-
-# ######## TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS ###### TRANSIT FOLDED PLOTS #####################
-
-# for n, letter in enumerate("bc"):
-
-#     plt.figure()
-
-#     # Get the posterior median orbital parameters
-#     p = np.median(flat_samps["period"][n])
-#     t0 = np.median(flat_samps["t0"][n])
-#     mask = np.ones(len(time_lc), dtype=bool)
-
-
-#     # Plot the folded data
-#     x_fold = (time_lc[mask] - t0 + 0.5 * p) % p - 0.5 * p
-#     m = np.abs(x_fold) < 0.3
-#     plt.plot(
-#         x_fold[m], flux[mask][m] - gp_mod[m], ".k", label="data", zorder=-1000
-#     )
-
-#     # Plot the folded model
-#     pred = np.percentile(flat_samps["light_curves"][:, n, :], [16, 50, 84], axis=-1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
-#     plt.plot(phase_lc, pred[1], color="C1", label="model")
-#     art = plt.fill_between(
-#         phase_lc, pred[0], pred[2], color="C1", alpha=0.5, zorder=1000
-#     )
-#     art.set_edgecolor("none")
-
-#     # Annotate the plot with the planet's period
-#     txt = "period = {0:.4f} +/- {1:.4f} d".format(
-#         np.mean(flat_samps["period"][n].values),
-#         np.std(flat_samps["period"][n].values),
-#     )
-#     plt.annotate(
-#         txt,
-#         (0, 0),
-#         xycoords="axes fraction",
-#         xytext=(5, 5),
-#         textcoords="offset points",
-#         ha="left",
-#         va="bottom",
-#         fontsize=12,
-#     )
-
-#     plt.legend(fontsize=10, loc=4)
-#     plt.xlabel("time since transit [days]")
-#     plt.ylabel("de-trended flux")
-#     plt.title("EPIC 212813907{0}".format(letter))
-#     plt.xlim(-0.3, 0.3)
-
-######### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ################
-######### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ################
-######### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ###### FINAL TRANSIT FOLDED PHASE PLOTS ################
-
-
-plt.figure()
-
-# Get the posterior median orbital parameters
-p = np.median(flat_samps["period"])
-t0 = np.median(flat_samps["t0"])
-mask = np.ones(len(time_lc), dtype=bool)
-
-
-# Plot the folded data
-x_fold = (time_lc[mask] - t0 + 0.5 * p) % p - 0.5 * p
-m = np.abs(x_fold) < 0.3
-plt.plot(x_fold[m], flux[mask][m] - gp_mod[m], ".k", label="data", zorder=-1000)
-
-# Plot the folded model
-pred = np.percentile(flat_samps["light_curves"][:, n, :], [16, 50, 84], axis=-1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
-plt.plot(phase_lc, pred[1], color="C1", label="model")
-art = plt.fill_between(
-    phase_lc, pred[0], pred[2], color="C1", alpha=0.5, zorder=1000
-    )
-art.set_edgecolor("none")
-
-# Annotate the plot with the planet's period
-txt = "period = {0:.4f} +/- {1:.4f} d".format(
-    np.mean(flat_samps["period"].values),
-    np.std(flat_samps["period"].values),
-    )
-plt.annotate(
-    txt,
-    (0, 0),
-    xycoords="axes fraction",
-    xytext=(5, 5),
-    textcoords="offset points",
-    ha="left",
-    va="bottom",
-    fontsize=12,
-    )
-
-plt.legend(fontsize=10, loc=4)
-plt.xlabel("time since transit [days]")
-plt.ylabel("de-trended flux")
-plt.title("TOI-5349b")
-plt.xlim(-0.3, 0.3)
-
-
-######## FINAL RV FOLDED PHASE PLOTS ########### FINAL RV FOLDED PHASE PLOTS ######### FINAL RV FOLDED PHASE PLOTS #############
-######## FINAL RV FOLDED PHASE PLOTS ########### FINAL RV FOLDED PHASE PLOTS ######### FINAL RV FOLDED PHASE PLOTS #############
-######## FINAL RV FOLDED PHASE PLOTS ########### FINAL RV FOLDED PHASE PLOTS ######### FINAL RV FOLDED PHASE PLOTS #############
-
-plt.figure()
-
-# Get the posterior median orbital parameters
-p = np.median(flat_samps["period"])
-t0 = np.median(flat_samps["t0"])
-
-# Compute the median of posterior estimate of the background RV
-# and the contribution from the other planet. Then we can remove
-# this from the data to plot just the planet we care about.
-other = np.median(flat_samps["vrad"][:, (n + 1) % 2], axis=-1)
-other += np.median(flat_samps["bkg"], axis=-1)
-
-# Plot the folded data
-x_fold = (x_rv - t0 + 0.5 * p) % p - 0.5 * p
-plt.errorbar(x_fold, y_rv - other, yerr=yerr_rv, fmt=".k", label="data")
-
-# Compute the posterior prediction for the folded RV model for this
-# planet
-t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
-inds = np.argsort(t_fold)
-pred = np.percentile(
-    flat_samps["vrad_pred"][inds, n], [16, 50, 84], axis=-1
-    )
-plt.plot(t_fold[inds], pred[1], color="C1", label="model")
-art = plt.fill_between(
-    t_fold[inds], pred[0], pred[2], color="C1", alpha=0.3
-    )
-art.set_edgecolor("none")
-
-plt.legend(fontsize=10)
-plt.xlim(-0.5 * p, 0.5 * p)
-plt.xlabel("phase [days]")
-plt.ylabel("radial velocity [m/s]")
-plt.title("TOI-5349b")
-
-
-
-
-######## RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ###### RV FOLDED PLOTS ######################
-
-#     plt.figure()
-
-#     # Get the posterior median orbital parameters
-#     p = np.median(flat_samps["period"][n])
-#     t0 = np.median(flat_samps["t0"][n])
-
-#     # Compute the median of posterior estimate of the background RV
-#     # and the contribution from the other planet. Then we can remove
-#     # this from the data to plot just the planet we care about.
-#     other = np.median(flat_samps["vrad"][:, (n + 1) % 2], axis=-1)
-#     other += np.median(flat_samps["bkg"], axis=-1)
-
-#     # Plot the folded data
-#     x_fold = (x_rv - t0 + 0.5 * p) % p - 0.5 * p
-#     plt.errorbar(x_fold, y_rv - other, yerr=yerr_rv, fmt=".k", label="data")
-
-#     # Compute the posterior prediction for the folded RV model for this
-#     # planet
-#     t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
-#     inds = np.argsort(t_fold)
-#     pred = np.percentile(
-#         flat_samps["vrad_pred"][inds, n], [16, 50, 84], axis=-1
-#     )
-#     plt.plot(t_fold[inds], pred[1], color="C1", label="model")
-#     art = plt.fill_between(
-#         t_fold[inds], pred[0], pred[2], color="C1", alpha=0.3
-#     )
-#     art.set_edgecolor("none")
-
-#     plt.legend(fontsize=10)
-#     plt.xlim(-0.5 * p, 0.5 * p)
-#     plt.xlabel("phase [days]")
-#     plt.ylabel("radial velocity [m/s]")
-#     plt.title("K2-24{0}".format(letter))
-
-
-
-
-
-
-
 # trace.to_dataframe(trace, var_names=var_names)
-
 # dir(trace) # to check what commands are available for trace
-
 # samples = trace.to_dataframe(trace, varnames=var_names)

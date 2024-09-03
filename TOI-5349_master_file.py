@@ -1,4 +1,5 @@
 import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash
+from matplotlib.colors import to_rgba as rgba
 import lightkurve as lk
 import numpy as np
 import exoplanet as xo
@@ -88,33 +89,33 @@ hpf_data = pd.read_csv('TOI-5349_rv_bin_HPF_013024.csv', header = 0,
 hpf_data['instrument'] = 'HPF'
 
 mx_red_time = (mx_red_data['time'] - tess_time_offset).values #
-mx_red_rad_vel = mx_red_data['radial_velocity'].values
+mx_red_rv = mx_red_data['radial_velocity'].values
 mx_red_rv_err = mx_red_data['rv_error'].values
 
 mx_blue_time = (mx_blue_data['time'] - tess_time_offset).values 
-mx_blue_rad_vel = mx_blue_data['radial_velocity'].values
+mx_blue_rv = mx_blue_data['radial_velocity'].values
 mx_blue_rv_err = mx_blue_data['rv_error'].values
 
 
 # Merging all the datasets together #
 merged_data = pd.concat([mx_red_data, mx_blue_data, hpf_data], axis = 0).reset_index(drop=True)
-time = (merged_data['time'] - tess_time_offset).values 
-rad_vel = merged_data['radial_velocity'].values
+time_rv = (merged_data['time'] - tess_time_offset).values 
+rv = merged_data['radial_velocity'].values
 rv_err = merged_data['rv_error'].values
-instrument = merged_data['instrument'].values
+rv_instrument = merged_data['instrument'].values
 
 # Computing a reference time that will be used to normalize the trends model #
-time_ref = 0.5 * (time.min() + time.max())
+time_ref = 0.5 * (time_rv.min() + time_rv.max())
 
 # Making a fine grid that spans the observation window for plotting purposes #
-t = np.linspace(time.min() - 5, time.max() + 5, 5000)
+t = np.linspace(time_rv.min() - 5, time_rv.max() + 5, 5000)
 
 # print(merged_data)
 plt.figure()
-plt.plot(time, rad_vel, linestyle = 'none',marker = 'o')
-for n_instrument in np.unique(instrument):
-    cull = instrument == n_instrument
-    plt.plot(time[cull], rad_vel[cull], linestyle = 'none', marker = 'o', 
+plt.plot(time_rv, rv, linestyle = 'none',marker = 'o')
+for n_instrument in np.unique(rv_instrument):
+    cull = rv_instrument == n_instrument
+    plt.plot(time_rv[cull], rv[cull], linestyle = 'none', marker = 'o', 
         label = n_instrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)'))
 plt.title('Radial Velocity Data')
 plt.xlabel("time [days]")
@@ -124,7 +125,7 @@ plt.ylabel("radial velocity [m/s]")
 # print('all plots are done')
 
 # phase = phaseup(mx_blue_time, 2521.81748925, 3.31793068)
-# plt.plot(phase, mx_blue_rad_vel, linestyle = 'none', marker = '.')
+# plt.plot(phase, mx_blue_rv, linestyle = 'none', marker = '.')
 
 
 ################## THE MODEL #################### THE MODEL #################### THE MODEL ################## THE MODEL ##################
@@ -158,7 +159,7 @@ MSun2MJup = u.Msun.to('Mjup')
 MSun2MEarth = u.Msun.to('Mearth')
 
 # For the Radial Velocity Model
-Ks = xo.estimate_semi_amplitude(periods, time, rad_vel, rv_err, t0s = t0s)
+Ks = xo.estimate_semi_amplitude(periods, time_rv, rv, rv_err, t0s = t0s)
 
 
 with pm.Model() as model:
@@ -242,18 +243,18 @@ with pm.Model() as model:
     
     #Jitter & a baseline for now RV trend each instrument will have its own rv offset aka trend
     RVOffset = pm.Normal("RVOffset",
-                         mu = np.array([0]*len(merged_data.instrument.unique())), 
+                         mu = np.array([0]*len(merged_data.rv_instrument.unique())), 
                          sigma = 20000, 
-                         shape = len(merged_data.instrument.unique()),) #offset relative to each instrument
+                         shape = len(merged_data.rv_instrument.unique()),) #offset relative to each instrument
     
-    RVJitter = pm.Uniform("RVJitter", 1e-3, 1e3, shape = len(merged_data.instrument.unique())) #adding additional noise
+    RVJitter = pm.Uniform("RVJitter", 1e-3, 1e3, shape = len(merged_data.rv_instrument.unique())) #adding additional noise
     
     RVMean = tt.zeros(merged_data.shape[0])
     RVError = tt.zeros(merged_data.shape[0])
     
-    for i, inst in enumerate(merged_data.instrument.unique()):
-        RVMean += RVOffset[i] * (merged_data.instrument == inst)
-        RVError += tt.sqrt(rv_err**2 + RVJitter[i]**2) * (merged_data.instrument == inst)
+    for i, inst in enumerate(merged_data.rv_instrument.unique()):
+        RVMean += RVOffset[i] * (merged_data.rv_instrument == inst)
+        RVError += tt.sqrt(rv_err**2 + RVJitter[i]**2) * (merged_data.rv_instrument == inst)
         
     pm.Deterministic("RVMean", RVMean)
     pm.Deterministic("RVError", RVError)
@@ -272,7 +273,7 @@ with pm.Model() as model:
             return pm.Deterministic("rv_model" + name, vrad)
     
     # Define the RVs at the observed times
-    rv_model = get_rv_model(time) # For all 3 instruments #rv model was the sum of multiple planets
+    rv_model = get_rv_model(time_rv) # For all 3 instruments #rv model was the sum of multiple planets
 
     # Define the model on a fine grid as computed above (for plotting purposes)
     rv_model_pred = get_rv_model(t, name = "_pred")
@@ -282,7 +283,7 @@ with pm.Model() as model:
 
     # Finally add in the observation model to the likelikehood. 
     # This next line adds a new contribution to the log probability of the PyMC3 model
-    pm.Normal("rv_obs", mu = rv_model, sd = RVError, observed = rad_vel - RVMean)
+    pm.Normal("rv_obs", mu = rv_model, sd = RVError, observed = rv - RVMean)
        
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
@@ -421,7 +422,7 @@ datelabel = "{:%m-%d-%Y}".format(datetime.datetime.now())
 with model:
     fig, axes = plt.subplots(2, 1, figsize = (10, 5), sharex = True)
     ax = axes[0]
-    ax.errorbar(time, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt = ".k")
+    ax.errorbar(time_rv, rv - map_soln["RVMean"], yerr = rv_err, fmt = ".k")
     ax.plot(t, vrad_pred, "--k", alpha = 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad_pred), "--k", alpha= 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad), ":k", alpha= 0.5) 
@@ -435,7 +436,7 @@ with model:
 
 
     ax = axes[1]
-    ax.errorbar(time, rad_vel - map_soln['RVMean'] - map_soln["rv_model"], yerr = rv_err, fmt = ".k")
+    ax.errorbar(time_rv, rv - map_soln['RVMean'] - map_soln["rv_model"], yerr = rv_err, fmt = ".k")
     ax.axhline(0, color = "k", lw = 1)
     ax.set_title("residuals")
     ax.set_ylabel("residuals [m/s]")
@@ -493,10 +494,10 @@ ax.figure.savefig('TOI-5349-b_LC_phase_plot_{}.pdf'.format(datelabel), bbox_inch
 
 fig, ax = plt.subplots(figsize = (10, 5))
 
-rv_xfold = (time - t0 + 0.5 * period) % period - 0.5 * period # stacking everything by 1 period and then shifting reference point to 0
-plt.errorbar(rv_xfold, rad_vel - map_soln["RVMean"], yerr = rv_err, fmt = ".k", label = "data")
+rv_xfold = (time_rv - t0 + 0.5 * period) % period - 0.5 * period # stacking everything by 1 period and then shifting reference point to 0
+plt.errorbar(rv_xfold, rv - map_soln["RVMean"], yerr = rv_err, fmt = ".k", label = "data")
 
-ax.scatter(rv_xfold, rad_vel - map_soln["RVMean"],
+ax.scatter(rv_xfold, rv - map_soln["RVMean"],
     c = "k",
     marker = ".",
     alpha = 0.2,
@@ -551,10 +552,10 @@ var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Tra
 output_dict = {'time_lc' : time_lc, #Save photometry
                'lc' : flux,
                'lc_err' : flux_error,
-               'time_rv' : time,
-               'rv' : rad_vel,      #Save RV
+               'time_rv' : time_rv,
+               'rv' : rv,      #Save RV
                'rv_err' : rv_err,
-               'rv_instrument' : instrument,
+               'rv_instrument' : rv_instrument,
                "map_solution" : map_soln, #Save solution
                "trace" : trace,
                "var_names" : var_names,
@@ -566,12 +567,18 @@ with open('TOI-5349_{}.pkl'.format(datelabel), 'wb') as f:
 ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
 ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
 ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE ############# CHECKING STATUS OF CONVERGENCE #############
+from functools import partial
 
-# percentile_86 = np.percentile(trace, 86)
-posteriors  = az.summary(trace, var_names = var_names, stat_funcs = {'median':np.nanmedian})
-# data = az.extract(posteriors)
+posteriors  = az.summary(
+    trace, 
+    var_names = var_names, 
+    round_to = "None", 
+    stat_funcs = {'median':np.nanmedian, 'lowerpercentile':partial(np.nanpercentile,q=16), 'upperpercentile':partial(np.nanpercentile,q=84)}
+    )
 posteriors_df = pd.DataFrame(posteriors)
-# print(posteriors_df)
+posteriors_df['neg1sigma'] = posteriors_df['median'] - posteriors_df.lowerpercentile
+posteriors_df['pos1sigma'] = posteriors_df.upperpercentile - posteriors_df['median']
+
 posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
 
 # pdb.set_trace()
@@ -633,9 +640,9 @@ plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight
 #     time_lc = output_dict['time_lc']
 #     flux = output_dict['lc']
 #     flux_error = output_dict['lc_err']
-#     x_rv = output_dict['time_rv']
+#     rv = output_dict['time_rv']
 #     y_rv = output_dict['rv']
-#     yerr_rv = output_dict['rv_err']
+#     rv_err = output_dict['rv_err']
 #     rv_instrument = output_dict['rv_instrument']
 #     map_soln =   output_dict['map_solution']
 
@@ -721,13 +728,13 @@ for n, letter in enumerate("b"):
     bkg = map_soln["RVMean"]
     
     # Plot the folded data
-    x_fold = (x_rv - t0 + 0.5 * p) % p - 0.5 * p
-    # plt.errorbar(x_fold, y_rv -bkg, yerr=yerr_rv, fmt=".k", label="data")
+    x_fold = (rv - t0 + 0.5 * p) % p - 0.5 * p
+    # plt.errorbar(x_fold, y_rv -bkg, yerr=rv_err, fmt=".k", label="data")
     for thisinstrument in pd.Series(rv_instrument).unique():
         mask = rv_instrument == thisinstrument
         plt.errorbar(
-            x_fold[mask], (y_rv - bkg)[mask], 
-            yerr = yerr_rv[mask], 
+            x_fold[mask], (rv - bkg)[mask], 
+            yerr = rv_err[mask], 
             marker = 'o', 
             linestyle = 'none', 
             ecolor=rgba('black',0.2),
@@ -738,7 +745,7 @@ for n, letter in enumerate("b"):
         plt.tick_params(axis = 'both', which ='minor', direction ='in', length = 4, width = 1)
         
     # Compute the posterior prediction for the folded RV model for this planet
-    t_rv = np.linspace(x_rv.min() - 5, x_rv.max() + 5, 5000)
+    t_rv = np.linspace(rv.min() - 5, rv.max() + 5, 5000)
     t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
     inds = np.argsort(t_fold)
     bkg = np.median(flat_samps['RVMean'],axis=1)

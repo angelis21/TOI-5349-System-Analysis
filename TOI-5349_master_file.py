@@ -1,4 +1,4 @@
-import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash
+import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash # specifically for cluster usage
 from matplotlib.colors import to_rgba as rgba
 import lightkurve as lk
 import numpy as np
@@ -19,6 +19,8 @@ import arviz as az
 import pickle
 
 az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generating trace plots
+plt.style.use('ggplot')
+matplotlib.use( 'tkagg' )
 
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################

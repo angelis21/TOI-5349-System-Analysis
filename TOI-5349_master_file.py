@@ -79,14 +79,14 @@ plt.xlim(-0.1, 0.1)
 mx_red_data = pd.read_csv('TOI-5349_rv_bin_MAROONX_red.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
 
-mx_red_data['instrument'] = 'maroon_x_red'
+mx_red_data['rv_instrument'] = 'maroon_x_red'
 mx_blue_data = pd.read_csv('TOI-5349_rv_bin_MAROONX_blue.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
-mx_blue_data['instrument'] = 'maroon_x_blue'
+mx_blue_data['rv_instrument'] = 'maroon_x_blue'
 
 hpf_data = pd.read_csv('TOI-5349_rv_bin_HPF_013024.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
-hpf_data['instrument'] = 'HPF'
+hpf_data['rv_instrument'] = 'HPF'
 
 mx_red_time = (mx_red_data['time'] - tess_time_offset).values #
 mx_red_rv = mx_red_data['radial_velocity'].values
@@ -102,7 +102,7 @@ merged_data = pd.concat([mx_red_data, mx_blue_data, hpf_data], axis = 0).reset_i
 time_rv = (merged_data['time'] - tess_time_offset).values 
 rv = merged_data['radial_velocity'].values
 rv_err = merged_data['rv_error'].values
-rv_instrument = merged_data['instrument'].values
+rv_instrument = merged_data['rv_instrument'].values
 
 # Computing a reference time that will be used to normalize the trends model #
 time_ref = 0.5 * (time_rv.min() + time_rv.max())

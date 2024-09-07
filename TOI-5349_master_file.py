@@ -1,4 +1,4 @@
-import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash # specifically for cluster usage
+# import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash # specifically for cluster usage
 from matplotlib.colors import to_rgba as rgba
 import lightkurve as lk
 import numpy as np
@@ -19,8 +19,8 @@ import arviz as az
 import pickle
 
 az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generating trace plots
-plt.style.use('ggplot')
-matplotlib.use( 'tkagg' )
+# plt.style.use('ggplot')
+# matplotlib.use( 'tkagg' )
 
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
@@ -29,32 +29,85 @@ matplotlib.use( 'tkagg' )
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
-tess_data = pd.read_csv('TOI-5349_stitched_data.csv')
+# tess_data = pd.read_csv('TOI-5349_stitched_data.csv')
+tess_data = pd.read_csv('TOI-5349_stitched_data_tess_sectors.csv')
+
 
 time_lc = tess_data['time'].values
 t_lc = np.linspace(time_lc.min() - 5, time_lc.max() + 5, 5000)
 
 flux = tess_data['flux'].values
 flux_error = tess_data['flux_err'].values
+sector = tess_data['sector'].values
 mask = (time_lc < 2481.4) | (time_lc > 2481.9)
 
-plt.figure()
-plt.plot(time_lc[mask], flux[mask], linestyle = 'none', color = 'k', marker = '.', ms = 1)
-plt.ylabel("relative flux")
-plt.xlabel("time [days]")
-plt.title('TESS Photometry of TOI-5349')
+# Reassigning tess data variables to only include flux values less than 1.05
+mask2 = flux < 1.05
+
+adj_flux = flux[mask2]
+adj_time_lc = time_lc[mask2]
+adj_flux_error = flux_error[mask2]
+adj_sector = sector[mask2]
+
+# plt.figure()
+# plt.plot(time_lc[mask], flux[mask], linestyle = 'none', color = 'k', marker = '.', ms = 1)
+# plt.ylabel("relative flux")
+# plt.xlabel("time [days]")
+# plt.title('TESS Photometry of TOI-5349')
+# plt.show()
 # plt.savefig('tess_lc1.png',bbox_inches='tight', pad_inches=0.0)
 # plt.close()
 
 plt.figure()
-plt.plot(time_lc, flux, color = 'k', marker = ".", ms = 1, linestyle = 'none')
-plt.xlim(3205, 3235)
+plt.plot(time_lc[mask2], flux[mask2], color = 'k', marker = ".", ms = 1, linestyle = 'none')
+# plt.plot(time_lc, flux, color = 'k', marker = ".", ms = 1, linestyle = 'none')
+# plt.xlim(3205, 3235)
 # plt.ylim(0.6, 1.5)
 plt.ylabel("relative flux")
 plt.xlabel("time [days]")
 plt.title('TESS Photometry of TOI-5349')
+plt.show()
 # plt.savefig('tess_lc2.png',bbox_inches='tight', pad_inches=0.0)
 # plt.close()
+
+
+plt.figure()
+# plt.plot(time_lc[mask2], flux[mask2], linestyle = 'none',marker = 'o')
+for n_sector in np.unique(adj_sector):
+    cull = adj_sector == n_sector
+    plt.plot(adj_time_lc[cull], adj_flux[cull], linestyle = 'none', marker = 'o', label = n_sector)
+plt.ylabel("relative flux")
+plt.xlabel("time [days]")
+plt.title('TESS Photometry of TOI-5349')
+plt.legend()
+plt.show()
+
+# RBO DATA #
+# RBO DATA #
+# RBO DATA #
+
+rbo_data1 = pd.read_csv('TOI-5349_20230104_RBO_measurements.csv')
+rbo_data2 = pd.read_csv('TOI-5349_20230114_RBO_measurements.csv')
+
+time_rbo1 = rbo_data1['BJD_TDB'].values
+rbo_flux1 = rbo_data1['rel_flux_T1'].values
+rbo_flux_err1 = rbo_data1['rel_flux_err_T1'].values
+
+time_rbo2 = rbo_data2['BJD_TDB'].values
+rbo_flux2 = rbo_data2['rel_flux_T1'].values
+rbo_flux_err2 = rbo_data2['rel_flux_err_T1'].values
+
+norm_rbo_flux1 = rbo_flux1/np.median(rbo_flux1)
+norm_rbo_flux_err1 = rbo_flux_err1/np.median(rbo_flux1)
+
+norm_rbo_flux2 = rbo_flux2/np.median(rbo_flux2)
+norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
+
+# print('Normalized flux from data set 1: ', norm_rbo_flux1[0:10])
+# print('Normalized error from data set 1: ', norm_rbo_flux_err1[0:10])
+
+# print('Normalized flux from data set 2: ', norm_rbo_flux2[0:10])
+# print('Normalized error from data set 2: ', norm_rbo_flux_err2[0:10])
 
 tess_time_offset = 2457000
 kepler_time_offset = 2454833
@@ -78,6 +131,8 @@ plt.xlim(-0.1, 0.1)
 ### RADIAL VELOCITY DATA ###
 ### RADIAL VELOCITY DATA ###
 ### RADIAL VELOCITY DATA ###
+
+# MAROON-X DATA
 mx_red_data = pd.read_csv('TOI-5349_rv_bin_MAROONX_red.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
 
@@ -97,7 +152,6 @@ mx_red_rv_err = mx_red_data['rv_error'].values
 mx_blue_time = (mx_blue_data['time'] - tess_time_offset).values 
 mx_blue_rv = mx_blue_data['radial_velocity'].values
 mx_blue_rv_err = mx_blue_data['rv_error'].values
-
 
 # Merging all the datasets together #
 merged_data = pd.concat([mx_red_data, mx_blue_data, hpf_data], axis = 0).reset_index(drop=True)
@@ -122,6 +176,7 @@ for n_instrument in np.unique(rv_instrument):
 plt.title('Radial Velocity Data')
 plt.xlabel("time [days]")
 plt.ylabel("radial velocity [m/s]")
+plt.legend()
 # plt.savefig('radial_velocities.png',bbox_inches='tight', pad_inches=0.0)
 # plt.close()
 # print('all plots are done')
@@ -145,12 +200,12 @@ t0_error = [0.1]
 #Number of Planets
 nplanets = len(periods)
 # Stellar Radius
-R_star = [0.578, 0.017] #in solar radii
+R_star = [0.582, 0.014] #old values [0.578, 0.017] #in solar radii
 # Stellar Mass
-M_star = [0.610, 0.025] #in solar mass
+M_star = [0.608,0.022] #in solar mass #[0.610, 0.025] old values
 Mjup2Mearth = (const.M_jup / const.M_earth).value
 # Effective Temperature 
-Teff = [3751, 88] #in Kelvin and uncertainty is +/- 88
+Teff = [3751, 59] # [3751, 88] #in Kelvin and uncertainty is +/- 88
 Expected_msini = np.ones(nplanets) 
 Rsun2Rearth = u.Rsun.to('Rearth')
 RsunPerDay = ((const.R_sun/u.d).to(u.m/u.s)).value

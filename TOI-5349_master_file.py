@@ -17,6 +17,7 @@ from astropy import units as u
 import corner
 import arviz as az
 import pickle
+from collections import OrderedDict
 
 az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generating trace plots
 # plt.style.use('ggplot')
@@ -39,11 +40,13 @@ t_lc = np.linspace(time_lc.min() - 5, time_lc.max() + 5, 5000)
 flux = tess_data['flux'].values
 flux_error = tess_data['flux_err'].values
 sector = tess_data['sector'].values
-mask = (time_lc < 2481.4) | (time_lc > 2481.9)
 
+tess_exp = tess_data['exp'].values
+
+mask2 = ((time_lc < 2600) & (flux < 1.02)) | ((time_lc > 2600) & (flux < 1.04))
 # Reassigning tess data variables to only include flux values less than 1.05
-mask2 = flux < 1.05
-
+# mask2 = flux < 1.04
+#make second mask for left side data of 1.02
 adj_flux = flux[mask2]
 adj_time_lc = time_lc[mask2]
 adj_flux_error = flux_error[mask2]
@@ -58,29 +61,30 @@ adj_sector = sector[mask2]
 # plt.savefig('tess_lc1.png',bbox_inches='tight', pad_inches=0.0)
 # plt.close()
 
-plt.figure()
-plt.plot(time_lc[mask2], flux[mask2], color = 'k', marker = ".", ms = 1, linestyle = 'none')
-# plt.plot(time_lc, flux, color = 'k', marker = ".", ms = 1, linestyle = 'none')
-# plt.xlim(3205, 3235)
-# plt.ylim(0.6, 1.5)
-plt.ylabel("relative flux")
-plt.xlabel("time [days]")
-plt.title('TESS Photometry of TOI-5349')
-plt.show()
-# plt.savefig('tess_lc2.png',bbox_inches='tight', pad_inches=0.0)
-# plt.close()
+# plt.figure()
+# plt.plot(time_lc[mask2], flux[mask2], color = 'k', marker = ".", ms = 1, linestyle = 'none')
+# # plt.plot(time_lc, flux, color = 'k', marker = ".", ms = 1, linestyle = 'none')
+# # plt.xlim(3205, 3235)
+# # plt.ylim(0.6, 1.5)
+# plt.ylabel("relative flux")
+# plt.xlabel("time [days]")
+# plt.title('TESS Photometry of TOI-5349')
+# plt.show()
+# # plt.savefig('tess_lc2.png',bbox_inches='tight', pad_inches=0.0)
+# # plt.close()
 
 
-plt.figure()
-# plt.plot(time_lc[mask2], flux[mask2], linestyle = 'none',marker = 'o')
-for n_sector in np.unique(adj_sector):
-    cull = adj_sector == n_sector
-    plt.plot(adj_time_lc[cull], adj_flux[cull], linestyle = 'none', marker = 'o', label = n_sector)
-plt.ylabel("relative flux")
-plt.xlabel("time [days]")
-plt.title('TESS Photometry of TOI-5349')
-plt.legend()
-plt.show()
+# plt.figure()
+# # plt.plot(time_lc[mask2], flux[mask2], linestyle = 'none',marker = 'o')
+# for n_sector in np.unique(adj_sector):
+#     cull = adj_sector == n_sector
+#     plt.plot(adj_time_lc[cull], adj_flux[cull], linestyle = 'none', marker = 'o', label = n_sector)
+# plt.ylabel("relative flux")
+# plt.xlabel("time [days]")
+# plt.title('TESS Photometry of TOI-5349')
+# plt.legend()
+# plt.show()
+
 
 # RBO DATA #
 # RBO DATA #
@@ -92,6 +96,7 @@ rbo_data2 = pd.read_csv('TOI-5349_20230114_RBO_measurements.csv')
 time_rbo1 = rbo_data1['BJD_TDB'].values
 rbo_flux1 = rbo_data1['rel_flux_T1'].values
 rbo_flux_err1 = rbo_data1['rel_flux_err_T1'].values
+rbo_exp = rbo_data1['EXPTIME'].values
 
 time_rbo2 = rbo_data2['BJD_TDB'].values
 rbo_flux2 = rbo_data2['rel_flux_T1'].values
@@ -103,11 +108,39 @@ norm_rbo_flux_err1 = rbo_flux_err1/np.median(rbo_flux1)
 norm_rbo_flux2 = rbo_flux2/np.median(rbo_flux2)
 norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
 
-# print('Normalized flux from data set 1: ', norm_rbo_flux1[0:10])
-# print('Normalized error from data set 1: ', norm_rbo_flux_err1[0:10])
 
-# print('Normalized flux from data set 2: ', norm_rbo_flux2[0:10])
-# print('Normalized error from data set 2: ', norm_rbo_flux_err2[0:10])
+#need to add exposure time
+
+
+# Creating individual dictionaries for each photometry dataset based on TESS sector/instrument
+
+tess_sector_datasets = {}
+
+for i in np.unique(adj_sector):
+    temp_datasets = OrderedDict(
+    [
+        ("TESS Sector {}".format(i), [adj_time_lc, adj_flux, adj_flux_error, tess_exp]),
+    ]
+    )
+    tess_sector_datasets.update(temp_datasets)
+# print(tess_sector_datasets['TESS Sector 42'])
+
+rbo_dataset = OrderedDict(
+    [
+
+        ("RBO Data 1", [time_rbo1, norm_rbo_flux1, norm_rbo_flux_err1, rbo_exp]),
+        ("RBO Data 2", [time_rbo2, norm_rbo_flux2, norm_rbo_flux_err2, rbo_exp]),
+
+    ]
+    )
+print(rbo_dataset)
+
+# Creating one dictionary containing all photometric datasets by merging dicts from above
+all_datasets = {**tess_sector_datasets, **rbo_dataset}
+print(all_datasets)
+
+pdb.set_trace()
+
 
 tess_time_offset = 2457000
 kepler_time_offset = 2454833
@@ -346,36 +379,59 @@ with pm.Model() as model:
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
 
-    # Set up the mean transit model using a quadratic limb darkening law
-    star = xo.LimbDarkLightCurve(ustar)
-    
-    # Calculates light curve for each planet at its time vector
-    light_curves = star.get_light_curve(orbit = orbit, 
-                                        r = r_pl, 
-                                        t = time_lc,
-                                        # Change texp to match your data set
-                                        texp = 29.4*u.min.to('d'))
-    
-    # Saves the individual lightcurves 
-    pm.Deterministic("light_curves", light_curves) 
+    # Loop over the instruments
+    parameters = dict()
+    lc_models = dict()
+    # gp_preds =t()
+    # gp_preds_with_mean = dict()
 
-    hi_cad_light_curves = star.get_light_curve(orbit = orbit, 
-                                        r = r_pl, 
-                                        t = t_lc,
-                                        # Change texp to match your data set
-                                        texp = 29.4*u.min.to('d'))
-    
-    # Saves the individual lightcurves 
-    pm.Deterministic("hi_cad_light_curves", hi_cad_light_curves) 
+    for n, (name, (time_lc, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
-    # Save time for lightcurves
-    # pm.Deterministic("LCmodeltime", t_lc)
+        # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
+        with pm.Model(name=name, model=model):
+            # The flux zero point
+            mean = pm.Normal("mean", mu=0.0, sigma=10.0)
+
+            # The limb darkening
+            u = xo.QuadLimbDark("u")
+            star = xo.LimbDarkLightCurve(u)
+
+
+            # Set up the mean transit model using a quadratic limb darkening law
+            star = xo.LimbDarkLightCurve(ustar)
+
+            # Calculates light curve for each planet at its time vector
+            light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time_lc, texp = 29.4*u.min.to('d')) #this will also change # Change texp to match your data set
     
-    # Full photometric model, the sum of all transits + the baseline (mean)
-    lc_model = mean + tt.sum(light_curves, axis = -1)
+            # Saves the individual lightcurves 
+            pm.Deterministic("light_curves", light_curves) 
+
+            hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = 29.4*u.min.to('d'))
     
-    # The likelihood function assuming known Gaussian uncertainty
-    pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
+            # Saves the individual lightcurves 
+            pm.Deterministic("hi_cad_light_curves", hi_cad_light_curves) 
+
+            # Save time for lightcurves
+            # pm.Deterministic("LCmodeltime", t_lc)
+            
+            # Full photometric model, the sum of all transits + the baseline (mean)
+            lc_model = mean + tt.sum(light_curves, axis = -1)
+            
+            # The likelihood function assuming known Gaussian uncertainty
+            pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
+
+                        # The light curve model
+            def lc_model(mean, star, ror, texp, t):
+                return mean + 1e3 * tt.sum(
+                    star.get_light_curve(orbit=orbit, r=ror, t=t, texp=texp),
+                    axis=-1,
+                )
+
+            lc_model = partial(lc_model, mean, star, ror, texp)
+            lc_models[name] = lc_model
+
+    ## Things that will change: light curve data (flux) and time_lc), ustar will ONLY in a different bandpass/instrument,  mean  for each instrument,
+#   "light_curves_{}".format(thisinstrument)
 
     #################### GP MODEL #################### GP MODEL #################### GP MODEL #####################
     #################### GP MODEL #################### GP MODEL #################### GP MODEL #####################

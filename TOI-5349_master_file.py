@@ -34,22 +34,22 @@ az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generati
 tess_data = pd.read_csv('TOI-5349_stitched_data_tess_sectors.csv')
 
 
-time_lc = tess_data['time'].values
-t_lc = np.linspace(time_lc.min() - 5, time_lc.max() + 5, 5000)
+tess_time = tess_data['time'].values
+t_lc = np.linspace(tess_time.min() - 5, tess_time.max() + 5, 5000)
 
-flux = tess_data['flux'].values
-flux_error = tess_data['flux_err'].values
+tess_flux = tess_data['flux'].values
+tess_flux_error = tess_data['flux_err'].values
 sector = tess_data['sector'].values
 
 tess_exp = tess_data['exp'].values
 
-mask2 = ((time_lc < 2600) & (flux < 1.02)) | ((time_lc > 2600) & (flux < 1.04))
+mask2 = ((tess_time < 2600) & (tess_flux < 1.02)) | ((tess_time > 2600) & (tess_flux < 1.04))
 # Reassigning tess data variables to only include flux values less than 1.05
 # mask2 = flux < 1.04
 #make second mask for left side data of 1.02
-adj_flux = flux[mask2]
-adj_time_lc = time_lc[mask2]
-adj_flux_error = flux_error[mask2]
+adj_flux = tess_flux[mask2]
+adj_time_lc = tess_time[mask2]
+adj_flux_error = tess_flux_error[mask2]
 adj_sector = sector[mask2]
 
 # plt.figure()
@@ -139,7 +139,7 @@ print(rbo_dataset)
 all_datasets = {**tess_sector_datasets, **rbo_dataset}
 print(all_datasets)
 
-pdb.set_trace()
+# pdb.set_trace()
 
 
 tess_time_offset = 2457000
@@ -156,9 +156,9 @@ t0_error = [0.1]
 
 def phaseup(t, t0, period):
     return (((t-t0) - period/2.) % period - period/2.)
-phase = phaseup(time_lc, 2521.81748925, 3.31793068)
+phase = phaseup(tess_time, 2521.81748925, 3.31793068)
 
-plt.plot(phase, flux, linestyle = 'none', marker = '.')
+plt.plot(phase, tess_flux, linestyle = 'none', marker = '.')
 plt.xlim(-0.1, 0.1)
 
 ### RADIAL VELOCITY DATA ###
@@ -382,48 +382,43 @@ with pm.Model() as model:
     # Loop over the instruments
     parameters = dict()
     lc_models = dict()
-    # gp_preds =t()
+    # gp_preds = dict()
     # gp_preds_with_mean = dict()
 
-    for n, (name, (time_lc, flux, flux_error, texp)) in enumerate(all_datasets.items()):
+    utess = xo.QuadLimbDark("utess")
+    tessstar = xo.LimbDarkLightCurve(utess)
+    urbo = xo.QuadLimbDark("urbo")
+    rbostar = xo.LimbDarkLightCurve(urbo) 
+
+    for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
         # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
         with pm.Model(name=name, model=model):
             # The flux zero point
             mean = pm.Normal("mean", mu=0.0, sigma=10.0)
 
-            # The limb darkening
-            u = xo.QuadLimbDark("u")
-            star = xo.LimbDarkLightCurve(u)
-
-
-            # Set up the mean transit model using a quadratic limb darkening law
-            star = xo.LimbDarkLightCurve(ustar)
+            if bool(name.find('TESS')+1):
+                star = tessstar
+            else:
+                star = rbostar
 
             # Calculates light curve for each planet at its time vector
-            light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time_lc, texp = 29.4*u.min.to('d')) #this will also change # Change texp to match your data set
+            light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time, texp = texp[0]*u.s.to('d')) #this will also change # Change texp to match your data set
     
             # Saves the individual lightcurves 
-            pm.Deterministic("light_curves", light_curves) 
+            pm.Deterministic("light_curves_{}".format(name), light_curves) 
 
-            hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = 29.4*u.min.to('d'))
+            hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = texp[0]*u.s.to('d'))
     
             # Saves the individual lightcurves 
-            pm.Deterministic("hi_cad_light_curves", hi_cad_light_curves) 
+            pm.Deterministic("hi_cad_light_curves_{}".format(name), hi_cad_light_curves)
 
             # Save time for lightcurves
             # pm.Deterministic("LCmodeltime", t_lc)
             
-            # Full photometric model, the sum of all transits + the baseline (mean)
-            lc_model = mean + tt.sum(light_curves, axis = -1)
-            
-            # The likelihood function assuming known Gaussian uncertainty
-            pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
-
-                        # The light curve model
+            # The light curve model
             def lc_model(mean, star, ror, texp, t):
-                return mean + 1e3 * tt.sum(
-                    star.get_light_curve(orbit=orbit, r=ror, t=t, texp=texp),
+                return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
                     axis=-1,
                 )
 
@@ -432,6 +427,38 @@ with pm.Model() as model:
 
     ## Things that will change: light curve data (flux) and time_lc), ustar will ONLY in a different bandpass/instrument,  mean  for each instrument,
 #   "light_curves_{}".format(thisinstrument)
+    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
+    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
+    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
+    
+    # In this portion, we will pptimize the Maximum a Posteriori AKA MAP Solution
+
+    # Defining a random starting point based on our priors defined 
+    map_soln = model.test_point
+    for name in all_datasets:
+        map_soln = pmx.optimize(map_soln, parameters[name])
+        
+    # Optimizing Lightcurve Model
+    map_soln = pmx.optimize(map_soln,
+        vars=[
+            ror,
+            b,
+            r_star,
+            ustar,
+            mean,
+        ],
+    )
+
+    # Optimizing Radial Velocity Model
+    map_soln = pmx.optimize(map_soln, [RVJitter, RVOffset, K])
+    map_soln = pmx.optimize(map_soln, vars = ecs)
+
+    # # Optimizing Gaussian Process 
+    # map_soln = pmx.optimize(map_soln, vars=[loggpamp, loggptimescale, loggpfactor, prot])
+        
+    # Refining all parameters simultaneously
+    map_soln = pmx.optimize(map_soln)
+
 
     #################### GP MODEL #################### GP MODEL #################### GP MODEL #####################
     #################### GP MODEL #################### GP MODEL #################### GP MODEL #####################
@@ -471,36 +498,6 @@ with pm.Model() as model:
     # # Compute the GP model prediction for plotting purposes
     # pm.Deterministic("gp_pred", gp.predict(flux - lc_model))
     
-    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
-    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
-    ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
-    
-    # In this portion, we will pptimize the Maximum a Posteriori AKA MAP Solution
-
-    # Defining a random starting point based on our priors defined 
-    map_soln = model.test_point
-    
-    # Optimizing Lightcurve Model
-    map_soln = pmx.optimize(map_soln,
-        vars=[
-            ror,
-            b,
-            r_star,
-            ustar,
-            mean,
-        ],
-    )
-
-    # Optimizing Radial Velocity Model
-    map_soln = pmx.optimize(map_soln, [RVJitter, RVOffset, K])
-    map_soln = pmx.optimize(map_soln, vars = ecs)
-
-    # # Optimizing Gaussian Process 
-    # map_soln = pmx.optimize(map_soln, vars=[loggpamp, loggptimescale, loggpfactor, prot])
-        
-    # Refining all parameters simultaneously
-    map_soln = pmx.optimize(map_soln)
-
 
 ################ THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ######
 ################ THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ################## THE MAP FIT PARAMETERS ######

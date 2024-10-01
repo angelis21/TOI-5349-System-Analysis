@@ -36,7 +36,6 @@ tess_data = pd.read_csv('TOI-5349_stitched_data_tess_sectors.csv')
 
 
 tess_time = tess_data['time'].values
-t_lc = np.linspace(tess_time.min() - 5, tess_time.max() + 5, 5000)
 
 tess_flux = tess_data['flux'].values
 tess_flux_error = tess_data['flux_err'].values
@@ -52,7 +51,7 @@ adj_flux = tess_flux[mask2]
 adj_time_lc = tess_time[mask2]
 adj_flux_error = tess_flux_error[mask2]
 adj_sector = sector[mask2]
-
+adj_tess_exp = tess_exp[mask2]
 # plt.figure()
 # plt.plot(time_lc[mask], flux[mask], linestyle = 'none', color = 'k', marker = '.', ms = 1)
 # plt.ylabel("relative flux")
@@ -118,9 +117,10 @@ norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
 tess_sector_datasets = {}
 
 for i in np.unique(adj_sector):
+    sector_mask = adj_sector == i
     temp_datasets = OrderedDict(
     [
-        ("TESS Sector {}".format(i), [adj_time_lc, adj_flux, adj_flux_error, tess_exp]),
+        ("TESS Sector {}".format(i), [adj_time_lc[sector_mask], adj_flux[sector_mask], adj_flux_error[sector_mask], adj_tess_exp[sector_mask]]),
     ]
     )
     tess_sector_datasets.update(temp_datasets)
@@ -159,8 +159,8 @@ def phaseup(t, t0, period):
     return (((t-t0) - period/2.) % period - period/2.)
 phase = phaseup(tess_time, 2521.81748925, 3.31793068)
 
-plt.plot(phase, tess_flux, linestyle = 'none', marker = '.')
-plt.xlim(-0.1, 0.1)
+# plt.plot(phase, tess_flux, linestyle = 'none', marker = '.')
+# plt.xlim(-0.1, 0.1)
 
 ### RADIAL VELOCITY DATA ###
 ### RADIAL VELOCITY DATA ###
@@ -201,16 +201,17 @@ time_ref = 0.5 * (time_rv.min() + time_rv.max())
 t = np.linspace(time_rv.min() - 5, time_rv.max() + 5, 5000)
 
 # print(merged_data)
-plt.figure()
-plt.plot(time_rv, rv, linestyle = 'none',marker = 'o')
-for n_instrument in np.unique(rv_instrument):
-    cull = rv_instrument == n_instrument
-    plt.plot(time_rv[cull], rv[cull], linestyle = 'none', marker = 'o', 
-        label = n_instrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)'))
-plt.title('Radial Velocity Data')
-plt.xlabel("time [days]")
-plt.ylabel("radial velocity [m/s]")
-plt.legend()
+# plt.figure()
+# plt.plot(time_rv, rv, linestyle = 'none',marker = 'o')
+# for n_instrument in np.unique(rv_instrument):
+#     cull = rv_instrument == n_instrument
+#     plt.plot(time_rv[cull], rv[cull], linestyle = 'none', marker = 'o', 
+#         label = n_instrument.replace('maroon_x_blue','MAROON-X (Blue)').replace('maroon_x_red','MAROON-X (Red)'))
+# plt.title('Radial Velocity Data')
+# plt.xlabel("time [days]")
+# plt.ylabel("radial velocity [m/s]")
+# plt.legend()
+# plt.show()
 # plt.savefig('radial_velocities.png',bbox_inches='tight', pad_inches=0.0)
 # plt.close()
 # print('all plots are done')
@@ -255,9 +256,9 @@ Ks = xo.estimate_semi_amplitude(periods, time_rv, rv, rv_err, t0s = t0s)
 
 with pm.Model() as model:
 
-    mean = pm.Normal("mean", mu = 0, sigma = 1.0) # The mean of the lightcurve (which is approximately = 1)
-    ustar = xo.distributions.QuadLimbDark("u")  # This  parameter is also being fit but is being sampled from Kipping 2013: 
-                                                # (https://ui.adsabs.harvard.edu/abs/2013MNRAS.435.2152K/abstract)
+    # mean = pm.Normal("mean", mu = 0, sigma = 1.0) # The mean of the lightcurve (which is approximately = 1)
+    # ustar = xo.distributions.QuadLimbDark("u")  # This  parameter is also being fit but is being sampled from Kipping 2013: 
+    #                                             # (https://ui.adsabs.harvard.edu/abs/2013MNRAS.435.2152K/abstract)
 
     
     # Stellar Parameters
@@ -266,7 +267,7 @@ with pm.Model() as model:
     r_star = BoundedNormal("r_star", mu=R_star[0], sd=R_star[1]) # Stellar Radius
     teff = pm.Bound(pm.Normal, lower=2000, upper=7000)("teff", mu=Teff[0], sd=Teff[1]) # Effective Temperature
     st_lum = pm.Deterministic("st_lum", (r_star**2) * ((teff/5777)**4)) # Stellar Luminosity
-    star_params = [mean, ustar] 
+    # star_params = [mean, ustar] 
     
     # Planet Parameters (note: Deterministic means values that were derived from the model)
     ror = pm.Uniform("ror", lower=0.01, upper = 0.99, shape=nplanets) # Radius ratio
@@ -391,12 +392,19 @@ with pm.Model() as model:
     urbo = xo.QuadLimbDark("urbo")
     rbostar = xo.LimbDarkLightCurve(urbo) 
 
+    hi_cad_time = {}
+
+
     for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
+
+        t_lc = np.linspace(time.min() - 5, time.max() + 5, 5000)
+        hi_cad_time[name] = t_lc
 
         # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
         with pm.Model(name=name, model=model):
             # The flux zero point
-            mean = pm.Normal("mean", mu=0.0, sigma=10.0)
+            mean = pm.Normal("mean", mu = 1.0, sigma = 10.0)
+
 
             if bool(name.find('TESS')+1):
                 star = tessstar
@@ -407,12 +415,12 @@ with pm.Model() as model:
             light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time, texp = texp[0]*u.s.to('d')) #this will also change # Change texp to match your data set
     
             # Saves the individual lightcurves 
-            pm.Deterministic("light_curves_{}".format(name), light_curves) 
+            pm.Deterministic("light_curves", light_curves) 
 
             hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = texp[0]*u.s.to('d'))
     
             # Saves the individual lightcurves 
-            pm.Deterministic("hi_cad_light_curves_{}".format(name), hi_cad_light_curves)
+            pm.Deterministic("hi_cad_light_curves", hi_cad_light_curves)
 
             # Save time for lightcurves
             # pm.Deterministic("LCmodeltime", t_lc)
@@ -420,26 +428,34 @@ with pm.Model() as model:
             # pdb.set_trace()
 
             #Lightcurve Jitter
-            Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3, shape = len(all_datasets[name][0]))
-            LC_error =
+            # Log_Jitter = pm.Uniform(f"{name}_Log_Jitter", -6, 3)
+            Ln_Jitter = pm.Uniform("Ln_Jitter", np.log(1e-6), np.log(1e3))
+
+            #Saving Log_Jitter as value in 
+            LC_Jitter = pm.Deterministic("Jitter", tt.exp(Ln_Jitter))
+
+            # LC_Jitter = pm.Deterministic(f"{name}_Jitter", tt.power(10, Log_Jitter))
+            # LC_Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3)
+            
+            # Full photometric model, the sum of all transits + the baseline (mean)
+            lc_model = mean + tt.sum(light_curves, axis=-1)
+
+            lc_error = tt.sqrt(LC_Jitter**2 + flux_error ** 2)
+
+            # The likelihood function assuming known Gaussian uncertainty
+            pm.Normal("transit_obs", mu = lc_model, sd = lc_error, observed = flux)
 
             parameters[name] = [mean]
-            parameters[f"{name}_noise"] = [Jitter]
+            parameters[f"{name}_noise"] = [Ln_Jitter]
             
-            # The light curve model
-        def lc_model(mean, star, ror, texp, t):
-            return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
-                axis=-1,
-            )
+        #     # The light curve model
+        # def lc_model(mean, star, ror, texp, t):
+        #     return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
+        #         axis=-1,
+        #     )
 
-        lc_model = partial(lc_model, mean, star, ror, texp)
-        lc_models[name] = lc_model
-
-    # Full photometric model, the sum of all transits + the baseline (mean)
-    lc_model = mean + tt.sum(light_curves, axis=-1)
-    
-    # The likelihood function assuming known Gaussian uncertainty
-    pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
+        # lc_model = partial(lc_model, mean, star, ror, texp)
+        # lc_models[name] = lc_model
 
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
@@ -451,14 +467,14 @@ with pm.Model() as model:
     map_soln = model.test_point
     # pdb.set_trace()
 
-    #optimizing system parameters for each lightcurve
+    # Optimizing system parameters for each lightcurve
     for name in all_datasets:
         if bool(name.find('TESS')+1):
             map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, utess])
         else:
             map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, urbo])
 
-    #optimizing noise for each instrument
+    # Optimizing noise parameter for each instrument
     for name in all_datasets:
         map_soln = pmx.optimize(map_soln, parameters[f"{name}_noise"])
 
@@ -524,7 +540,7 @@ for thiskey in list(map_soln.keys())[:-1]:
     print('{}: {}'.format(thiskey, map_soln[thiskey]))
 
 
-pdb.set_trace()
+# pdb.set_trace()
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ################## 
@@ -573,42 +589,43 @@ with model:
 ###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
 ###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
 ###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
+for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
-fig, ax = plt.subplots(figsize = (10, 5))
+    fig, ax = plt.subplots(figsize = (10, 5))
 
-x_fold = (time_lc - t0 + 0.5 * period) % period - 0.5 * period
-m = np.abs(x_fold) < 0.5 # plot will only show phases between -0.5 to 0.5
+    x_fold = (time - t0 + 0.5 * period) % period - 0.5 * period
+    m = np.abs(x_fold) < 0.5 # plot will only show phases between -0.5 to 0.5
 
-ax.scatter(x_fold[m], 1e3 * (flux[m]), #*******
-    c = "k",
-    marker = ".",
-    alpha = 0.2,
-    linewidths = 0,
-)
+    ax.scatter(x_fold[m], 1e3 * (flux[m]), #*******
+        c = "k",
+        marker = ".",
+        alpha = 0.2,
+        linewidths = 0,
+    )
 
-lc_mod = map_soln['light_curves']
-lc_modx = np.sort(x_fold)
-lc_mody = lc_mod[np.argsort(x_fold)]
+    lc_mod = map_soln[f'{name}_light_curves']
+    lc_modx = np.sort(x_fold)
+    lc_mody = lc_mod[np.argsort(x_fold)]
 
-ax.plot(lc_modx, 1e3 * (lc_mody + map_soln["mean"]), c = "purple", zorder = 1) #*******
+    ax.plot(lc_modx, 1e3 * (lc_mody + map_soln[f'{name}_mean']), c = "purple", zorder = 1) #*******
 
-# Overplot the phase binned light curve
-bins = np.linspace(-0.51, 0.51, 100)
-denom, _ = np.histogram(x_fold, bins)
-num, _ = np.histogram(x_fold, bins, weights = flux)
-denom[num == 0] = 1.0
+    # Overplot the phase binned light curve
+    bins = np.linspace(-0.51, 0.51, 100)
+    denom, _ = np.histogram(x_fold, bins)
+    num, _ = np.histogram(x_fold, bins, weights = flux)
+    denom[num == 0] = 1.0
 
-ax.scatter(0.5 * (bins[1:] + bins[:-1]), 1e3 * num / denom, #*******
-    color = "C1",
-    zorder = 2,
-    linewidths = 0,
-)
+    ax.scatter(0.5 * (bins[1:] + bins[:-1]), 1e3 * num / denom, #*******
+        color = "C1",
+        zorder = 2,
+        linewidths = 0,
+    )
 
-ax.set_xlim(-0.5, 0.5)
-ax.set_ylabel("de-trended flux [ppt]")
-_ = ax.set_xlabel("time since transit")
+    ax.set_xlim(-0.5, 0.5)
+    ax.set_ylabel("de-trended flux [ppt]")
+    _ = ax.set_xlabel("time since transit")
 
-ax.figure.savefig('TOI-5349-b_LC_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+    ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
 
 
 ###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
@@ -639,7 +656,7 @@ plt.xlabel("phase [days]")
 plt.legend()
 plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
-#pdb.set_trace()
+pdb.set_trace()
 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
@@ -779,59 +796,67 @@ gp_mod=np.zeros(len(time_lc))
 ######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
 ######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
 
-for n, letter in enumerate("b"):
+# PLOT HIGH CADENCE DATA
+# CHANGE VARIABLES 
 
-    plt.figure()
+for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
-    plt.gca().tick_params(direction = "in", which = 'both',bottom = True, top = False, left = True, right = True)
-    # Get the posterior median orbital parameters
-    p = np.median(flat_samps["period"][n])
-    t0 = np.median(flat_samps["t0"][n])
-    
+    for n, letter in enumerate("b"):
 
-    # Plot the folded data
-    x_fold = (time_lc - t0 + 0.5 * p) % p - 0.5 * p
-    m = (np.abs(x_fold) < 0.3) &(flux < 1.05)
-    plt.plot(
-        x_fold[m], flux[m] - gp_mod[m], ".k", label = "data", zorder = -1000)
+        plt.figure()
 
-    # Plot the folded model
-    pred = np.percentile(flat_samps["light_curves"][:, n, :], [16, 50, 84], axis = -1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
-    pred +=1
-    sort=np.argsort(x_fold)
-    plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model")
-    art = plt.fill_between(
-        x_fold[sort], 
-        pred[0][sort], 
-        pred[2][sort], 
-        color = "C1", 
-        alpha = 0.5, 
-        zorder = 1000
-    )
-    art.set_edgecolor("none")
+        plt.gca().tick_params(direction = "in", which = 'both',bottom = True, top = False, left = True, right = True)
+        # Get the posterior median orbital parameters
+        p = np.median(flat_samps["period"][n])
+        t0 = np.median(flat_samps["t0"][n])
+        
 
-    # Annotate the plot with the planet's period
-    txt = "period = {0:.4f} +/- {1:.4f} d".format(
-        np.mean(flat_samps["period"][n].values),
-        np.std(flat_samps["period"][n].values),
-    )
-    plt.annotate(
-        txt,
-        (0, 0),
-        xycoords = "axes fraction",
-        xytext = (5, 5),
-        textcoords = "offset points",
-        ha = "left",
-        va = "bottom",
-        fontsize = 12,
-    )
+        # Plot the folded data
+        x_fold = (time - t0 + 0.5 * p) % p - 0.5 * p
+        m = (np.abs(x_fold) < 0.3) &(flux < 1.05)
+        plt.plot(
+            x_fold[m], flux[m] - gp_mod[m], ".k", label = "data", zorder = -1000)
 
-    plt.legend(fontsize = 10, loc = 4)
-    plt.xlabel("time since transit [days]")
-    plt.ylabel("de-trended flux")
-    plt.title("TOI-5349{0}".format(letter))
-    plt.xlim(-0.3, 0.3)
-    plt.show()
+        # Plot the folded model
+        pred = np.percentile(flat_samps[f"{name}_light_curves"][:, n, :], [16, 50, 84], axis = -1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
+        pred +=1
+        sort=np.argsort(x_fold)
+        plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model")
+        art = plt.fill_between(
+            x_fold[sort], 
+            pred[0][sort], 
+            pred[2][sort], 
+            color = "C1", 
+            alpha = 0.5, 
+            zorder = 1000
+        )
+        art.set_edgecolor("none")
+
+        # Annotate the plot with the planet's period
+        txt = "period = {0:.4f} +/- {1:.4f} d".format(
+            np.mean(flat_samps["period"][n].values),
+            np.std(flat_samps["period"][n].values),
+        )
+        plt.annotate(
+            txt,
+            (0, 0),
+            xycoords = "axes fraction",
+            xytext = (5, 5),
+            textcoords = "offset points",
+            ha = "left",
+            va = "bottom",
+            fontsize = 12,
+        )
+
+        plt.legend(fontsize = 10, loc = 4)
+        plt.xlabel("time since transit [days]")
+        plt.ylabel("de-trended flux")
+        plt.title("TOI-5349{0}".format(letter))
+        plt.xlim(-0.3, 0.3)
+        plt.show()
+        plt.savefig #Modify this
+
+    #
 
 ######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
 ######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######

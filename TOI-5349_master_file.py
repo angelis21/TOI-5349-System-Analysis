@@ -17,6 +17,7 @@ from astropy import units as u
 import corner
 import arviz as az
 import pickle
+from functools import partial
 from collections import OrderedDict
 
 az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generating trace plots
@@ -133,11 +134,11 @@ rbo_dataset = OrderedDict(
 
     ]
     )
-print(rbo_dataset)
+
 
 # Creating one dictionary containing all photometric datasets by merging dicts from above
 all_datasets = {**tess_sector_datasets, **rbo_dataset}
-print(all_datasets)
+
 
 # pdb.set_trace()
 
@@ -415,18 +416,31 @@ with pm.Model() as model:
 
             # Save time for lightcurves
             # pm.Deterministic("LCmodeltime", t_lc)
+
+            # pdb.set_trace()
+
+            #Lightcurve Jitter
+            Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3, shape = len(all_datasets[name][0]))
+            LC_error =
+
+            parameters[name] = [mean]
+            parameters[f"{name}_noise"] = [Jitter]
             
             # The light curve model
-            def lc_model(mean, star, ror, texp, t):
-                return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
-                    axis=-1,
-                )
+        def lc_model(mean, star, ror, texp, t):
+            return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
+                axis=-1,
+            )
 
-            lc_model = partial(lc_model, mean, star, ror, texp)
-            lc_models[name] = lc_model
+        lc_model = partial(lc_model, mean, star, ror, texp)
+        lc_models[name] = lc_model
 
-    ## Things that will change: light curve data (flux) and time_lc), ustar will ONLY in a different bandpass/instrument,  mean  for each instrument,
-#   "light_curves_{}".format(thisinstrument)
+    # Full photometric model, the sum of all transits + the baseline (mean)
+    lc_model = mean + tt.sum(light_curves, axis=-1)
+    
+    # The likelihood function assuming known Gaussian uncertainty
+    pm.Normal("transit_obs", mu = lc_model, sd = flux_error, observed = flux)
+
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
@@ -435,19 +449,18 @@ with pm.Model() as model:
 
     # Defining a random starting point based on our priors defined 
     map_soln = model.test_point
+    # pdb.set_trace()
+
+    #optimizing system parameters for each lightcurve
     for name in all_datasets:
-        map_soln = pmx.optimize(map_soln, parameters[name])
-        
-    # Optimizing Lightcurve Model
-    map_soln = pmx.optimize(map_soln,
-        vars=[
-            ror,
-            b,
-            r_star,
-            ustar,
-            mean,
-        ],
-    )
+        if bool(name.find('TESS')+1):
+            map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, utess])
+        else:
+            map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, urbo])
+
+    #optimizing noise for each instrument
+    for name in all_datasets:
+        map_soln = pmx.optimize(map_soln, parameters[f"{name}_noise"])
 
     # Optimizing Radial Velocity Model
     map_soln = pmx.optimize(map_soln, [RVJitter, RVOffset, K])
@@ -511,7 +524,7 @@ for thiskey in list(map_soln.keys())[:-1]:
     print('{}: {}'.format(thiskey, map_soln[thiskey]))
 
 
-#pdb.set_trace()
+pdb.set_trace()
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ################## 

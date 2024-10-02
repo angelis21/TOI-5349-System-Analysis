@@ -394,7 +394,6 @@ with pm.Model() as model:
 
     hi_cad_time = {}
 
-
     for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
         t_lc = np.linspace(time.min() - 5, time.max() + 5, 5000)
@@ -581,7 +580,7 @@ with model:
     ax.set_ylabel("residuals [m/s]")
     # ax.set_xlim(3230, 3250)
     ax.set_xlabel("time [days]")
-    ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+    # ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 # print(np.unique(map_soln['RVMean'])) 
 # print(map_soln['RVOffset'])
 
@@ -625,7 +624,7 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
     ax.set_ylabel("de-trended flux [ppt]")
     _ = ax.set_xlabel("time since transit")
 
-    ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
+    # ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
 
 
 ###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
@@ -650,11 +649,11 @@ rv_mody = vrad_pred[np.argsort(t_fold)]
 
 plt.plot(rv_modx, rv_mody, c = "purple", zorder = 1, label = 'model') 
 plt.xlim(-0.5 * period, 0.5 * period)
-plt.title("TOI-5349b")
+plt.title("TOI-5349b RV Phase Plot")
 plt.ylabel("radial velocity [ms/s]")
 plt.xlabel("phase [days]")
 plt.legend()
-plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+# plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 pdb.set_trace()
 
@@ -685,7 +684,7 @@ with model:
 flat_samps = trace.posterior.stack(sample = ("chain", "draw"))
 
 var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Traditional RV Paramters
-             'u', "ror", 'aor', 'b', # The transit parameters
+             'utess', 'urbo' "ror", 'aor', 'b', # The transit parameters
              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The Physical Stellar Parameters
              'm_pl', 'r_jup',  'density_pl'] # The Planetary Parameters 
 
@@ -719,7 +718,7 @@ posteriors_df = pd.DataFrame(posteriors)
 posteriors_df['neg1sigma'] = posteriors_df['median'] - posteriors_df.lowerpercentile
 posteriors_df['pos1sigma'] = posteriors_df.upperpercentile - posteriors_df['median']
 
-posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
+# posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
 
 # pdb.set_trace()
 
@@ -733,7 +732,7 @@ posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
 
 _ = az.plot_trace(trace, var_names = var_names) 
 
-plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+# plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0) 
 
 ### CORNER PLOT ###
 ### CORNER PLOT ###
@@ -750,7 +749,7 @@ with model:
         use_math_text=True
         )
 
-plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+# plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
 # pdb.set_trace()
 
@@ -854,9 +853,8 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
         plt.title("TOI-5349{0}".format(letter))
         plt.xlim(-0.3, 0.3)
         plt.show()
-        plt.savefig #Modify this
+        # plt.savefig('TOI-5349_transit_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 
-    #
 
 ######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
 ######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
@@ -921,6 +919,8 @@ for n, letter in enumerate("b"):
     plt.ylabel("radial velocity [m/s]")
     plt.title("TOI-5349 {}".format(letter))
     plt.show()
+    # plt.savefig('TOI-5349_RV_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+
 
 # trace.to_dataframe(trace, var_names=var_names)
 # dir(trace) # to check what commands are available for trace

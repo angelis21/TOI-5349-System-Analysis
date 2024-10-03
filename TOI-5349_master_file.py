@@ -27,7 +27,7 @@ az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generati
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
-
+ 
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
@@ -108,6 +108,13 @@ norm_rbo_flux_err1 = rbo_flux_err1/np.median(rbo_flux1)
 norm_rbo_flux2 = rbo_flux2/np.median(rbo_flux2)
 norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
 
+# plt.figure()
+# plt.plot(time_rbo1, norm_rbo_flux1, linestyle = 'none', color = 'k', marker = '.', ms = 1)
+# plt.ylabel("relative flux")
+# plt.xlabel("time [days]")
+# plt.title('RBO Photometry of TOI-5349')
+# plt.show()
+
 
 #need to add exposure time
 
@@ -124,13 +131,16 @@ for i in np.unique(adj_sector):
     ]
     )
     tess_sector_datasets.update(temp_datasets)
+
 # print(tess_sector_datasets['TESS Sector 42'])
+# print(rbo_dataset['RBO Data 1'])
+# print(rbo_dataset['RBO Data 2'])
 
 rbo_dataset = OrderedDict(
     [
 
-        ("RBO Data 1", [time_rbo1, norm_rbo_flux1, norm_rbo_flux_err1, rbo_exp]),
-        ("RBO Data 2", [time_rbo2, norm_rbo_flux2, norm_rbo_flux_err2, rbo_exp]),
+        ("RBO (04-Jan-2023)", [time_rbo1, norm_rbo_flux1, norm_rbo_flux_err1, rbo_exp]), 
+        ("RBO (14-Jan-2023)", [time_rbo2, norm_rbo_flux2, norm_rbo_flux_err2, rbo_exp])
 
     ]
     )
@@ -263,9 +273,9 @@ with pm.Model() as model:
     
     # Stellar Parameters
     BoundedNormal = pm.Bound(pm.Normal, lower=0, upper=1.5)
-    m_star = BoundedNormal("m_star", mu=M_star[0], sd=M_star[1]) # Stellar Mass
-    r_star = BoundedNormal("r_star", mu=R_star[0], sd=R_star[1]) # Stellar Radius
-    teff = pm.Bound(pm.Normal, lower=2000, upper=7000)("teff", mu=Teff[0], sd=Teff[1]) # Effective Temperature
+    m_star = BoundedNormal("m_star", mu=M_star[0], sd=M_star[1], shape = 1) # Stellar Mass
+    r_star = BoundedNormal("r_star", mu=R_star[0], sd=R_star[1], shape = 1) # Stellar Radius
+    teff = pm.Bound(pm.Normal, lower=2000, upper=7000)("teff", mu=Teff[0], sd=Teff[1], shape = 1) # Effective Temperature
     st_lum = pm.Deterministic("st_lum", (r_star**2) * ((teff/5777)**4)) # Stellar Luminosity
     # star_params = [mean, ustar] 
     
@@ -280,7 +290,7 @@ with pm.Model() as model:
     # Orbital Parameters
     period = pm.Normal("period", mu = np.array(periods), sigma = np.array(period_error), shape = nplanets)
     t0 = pm.Normal("t0", mu = t0s, sigma = np.array(t0_error), shape = nplanets)
-    b = pm.Uniform("b", lower = 0, upper = 1, shape = nplanets, testval = np.array([0.9]))
+    b = pm.Uniform("b", lower = 0, upper = 1, shape = nplanets)
 
     #Here are definining our eccentric model
     #Look at section 17 for more information on sampling eccentricity vs. omega on a UnitDisk (https://arxiv.org/pdf/1907.09480.pdf)
@@ -375,7 +385,7 @@ with pm.Model() as model:
 
     # Finally add in the observation model to the likelikehood. 
     # This next line adds a new contribution to the log probability of the PyMC3 model
-    pm.Normal("rv_obs", mu = rv_model, sd = RVError, observed = rv - RVMean)
+    pm.Normal("rv_obs", mu = rv_model, sd = RVError, observed = rv - RVMean, shape = len(rv))
        
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
     #################### TRANSIT MODEL #################### TRANSIT MODEL #################### TRANSIT MODEL #####################
@@ -383,7 +393,6 @@ with pm.Model() as model:
 
     # Loop over the instruments
     parameters = dict()
-    lc_models = dict()
     # gp_preds = dict()
     # gp_preds_with_mean = dict()
 
@@ -402,7 +411,7 @@ with pm.Model() as model:
         # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
         with pm.Model(name=name, model=model):
             # The flux zero point
-            mean = pm.Normal("mean", mu = 1.0, sigma = 10.0)
+            mean = pm.Normal("mean", mu = 1.0, sigma = 10.0, shape = 1)
 
 
             if bool(name.find('TESS')+1):
@@ -412,7 +421,8 @@ with pm.Model() as model:
 
             # Calculates light curve for each planet at its time vector
             light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time, texp = texp[0]*u.s.to('d')) #this will also change # Change texp to match your data set
-    
+            # Define GP Here
+
             # Saves the individual lightcurves 
             pm.Deterministic("light_curves", light_curves) 
 
@@ -428,7 +438,7 @@ with pm.Model() as model:
 
             #Lightcurve Jitter
             # Log_Jitter = pm.Uniform(f"{name}_Log_Jitter", -6, 3)
-            Ln_Jitter = pm.Uniform("Ln_Jitter", np.log(1e-6), np.log(1e3))
+            Ln_Jitter = pm.Uniform("Ln_Jitter", np.log(1e-6), np.log(1e3), shape = 1)
 
             #Saving Log_Jitter as value in 
             LC_Jitter = pm.Deterministic("Jitter", tt.exp(Ln_Jitter))
@@ -437,24 +447,15 @@ with pm.Model() as model:
             # LC_Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3)
             
             # Full photometric model, the sum of all transits + the baseline (mean)
-            lc_model = mean + tt.sum(light_curves, axis=-1)
+            lc_model = mean + tt.sum(light_curves, axis=-1) # a GP model will be added here 
 
             lc_error = tt.sqrt(LC_Jitter**2 + flux_error ** 2)
 
             # The likelihood function assuming known Gaussian uncertainty
-            pm.Normal("transit_obs", mu = lc_model, sd = lc_error, observed = flux)
+            pm.Normal("transit_obs", mu = lc_model, sd = lc_error, observed = flux, shape = len(flux))
 
             parameters[name] = [mean]
             parameters[f"{name}_noise"] = [Ln_Jitter]
-            
-        #     # The light curve model
-        # def lc_model(mean, star, ror, texp, t):
-        #     return mean + 1e3 * tt.sum(light_curves(orbit=orbit, r=ror, t=time, texp = texp[0]*u.s.to('d')),
-        #         axis=-1,
-        #     )
-
-        # lc_model = partial(lc_model, mean, star, ror, texp)
-        # lc_models[name] = lc_model
 
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
@@ -580,7 +581,7 @@ with model:
     ax.set_ylabel("residuals [m/s]")
     # ax.set_xlim(3230, 3250)
     ax.set_xlabel("time [days]")
-    # ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+    ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 # print(np.unique(map_soln['RVMean'])) 
 # print(map_soln['RVOffset'])
 
@@ -592,7 +593,7 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
 
     fig, ax = plt.subplots(figsize = (10, 5))
 
-    x_fold = (time - t0 + 0.5 * period) % period - 0.5 * period
+    x_fold = (time - t0 + 0.5 * period) % period - 0.5 * period #in days
     m = np.abs(x_fold) < 0.5 # plot will only show phases between -0.5 to 0.5
 
     ax.scatter(x_fold[m], 1e3 * (flux[m]), #*******
@@ -609,22 +610,33 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
     ax.plot(lc_modx, 1e3 * (lc_mody + map_soln[f'{name}_mean']), c = "purple", zorder = 1) #*******
 
     # Overplot the phase binned light curve
-    bins = np.linspace(-0.51, 0.51, 100)
-    denom, _ = np.histogram(x_fold, bins)
-    num, _ = np.histogram(x_fold, bins, weights = flux)
-    denom[num == 0] = 1.0
+    lkobj = lk.LightCurve(time = x_fold,
+                                  flux = flux * 1e3,
+                                  flux_err = flux_error * 1e3)
 
-    ax.scatter(0.5 * (bins[1:] + bins[:-1]), 1e3 * num / denom, #*******
-        color = "C1",
-        zorder = 2,
-        linewidths = 0,
-    )
+
+    binned = lkobj.bin(time_bin_size = 8*u.min)
+    # bins = np.linspace(-0.51, 0.51, 100)
+    # denom, _ = np.histogram(x_fold, bins)
+    # num, _ = np.histogram(x_fold, bins, weights = flux)
+    # denom[num == 0] = 1.0
+
+    ax.errorbar(binned.time.value,binned.flux.value,
+        yerr=binned.flux_err.value, 
+        color = "C1", 
+        linestyle = 'none')
+
+    # ax.scatter(0.5 * (bins[1:] + bins[:-1]), 1e3 * num / denom, #*******
+    #     color = "C1",
+    #     zorder = 2,
+    #     linewidths = 0,
+    # )
 
     ax.set_xlim(-0.5, 0.5)
     ax.set_ylabel("de-trended flux [ppt]")
     _ = ax.set_xlabel("time since transit")
-
-    # ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
+    # plt.show()
+    ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
 
 
 ###### PRELIM RV PHASE PLOT ###### PRELIM RV PHASE PLOT ######
@@ -653,15 +665,15 @@ plt.title("TOI-5349b RV Phase Plot")
 plt.ylabel("radial velocity [ms/s]")
 plt.xlabel("phase [days]")
 plt.legend()
-# plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
-pdb.set_trace()
+# pdb.set_trace()
 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 
-NSteps = 1000
+NSteps = 500
 Nchains = 2
 Ncores = 1
 with model:
@@ -688,9 +700,11 @@ var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Tra
              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The Physical Stellar Parameters
              'm_pl', 'r_jup',  'density_pl'] # The Planetary Parameters 
 
-output_dict = {'time_lc' : time_lc, #Save photometry
-               'lc' : flux,
-               'lc_err' : flux_error,
+var_names += (np.char.array(list(all_datasets.keys()))+'_Jitter').tolist()
+var_names += (np.char.array(list(all_datasets.keys()))+'_mean').tolist()
+
+output_dict = {'all_datasets' : all_datasets,
+               'hi_cad_time' : hi_cad_time,
                'time_rv' : time_rv,
                'rv' : rv,      #Save RV
                'rv_err' : rv_err,
@@ -850,7 +864,7 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
         plt.legend(fontsize = 10, loc = 4)
         plt.xlabel("time since transit [days]")
         plt.ylabel("de-trended flux")
-        plt.title("TOI-5349{0}".format(letter))
+        plt.title(f"{name} Photometry")
         plt.xlim(-0.3, 0.3)
         plt.show()
         # plt.savefig('TOI-5349_transit_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)

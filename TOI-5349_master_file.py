@@ -397,9 +397,7 @@ with pm.Model() as model:
     # gp_preds_with_mean = dict()
 
     utess = xo.QuadLimbDark("utess")
-    tessstar = xo.LimbDarkLightCurve(utess)
     urbo = xo.QuadLimbDark("urbo")
-    rbostar = xo.LimbDarkLightCurve(urbo) 
 
     hi_cad_time = {}
 
@@ -409,53 +407,53 @@ with pm.Model() as model:
         hi_cad_time[name] = t_lc
 
         # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
-        with pm.Model(name=name, model=model):
-            # The flux zero point
-            mean = pm.Normal("mean", mu = 1.0, sigma = 10.0, shape = 1)
+        # with pm.Model(name=name, model=model):
+        # The flux zero point
+        mean = pm.Normal(f"{name}_mean", mu = 1.0, sigma = 10.0, shape = 1)
 
+        if bool(name.find('TESS')+1):
+            ustar = utess
+        else:
+            ustar = urbo
+        star = xo.LimbDarkLightCurve(ustar) 
 
-            if bool(name.find('TESS')+1):
-                star = tessstar
-            else:
-                star = rbostar
+        # Calculates light curve for each planet at its time vector
+        light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time, texp = texp[0]*u.s.to('d')) #this will also change # Change texp to match your data set
+        # Define GP Here
 
-            # Calculates light curve for each planet at its time vector
-            light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = time, texp = texp[0]*u.s.to('d')) #this will also change # Change texp to match your data set
-            # Define GP Here
+        # Saves the individual lightcurves 
+        pm.Deterministic(f"{name}_light_curves", light_curves) 
 
-            # Saves the individual lightcurves 
-            pm.Deterministic("light_curves", light_curves) 
+        hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = texp[0]*u.s.to('d'))
 
-            hi_cad_light_curves = star.get_light_curve(orbit = orbit, r = r_pl, t = t_lc, texp = texp[0]*u.s.to('d'))
-    
-            # Saves the individual lightcurves 
-            pm.Deterministic("hi_cad_light_curves", hi_cad_light_curves)
+        # Saves the individual lightcurves 
+        pm.Deterministic(f"{name}_hi_cad_light_curves", hi_cad_light_curves)
 
-            # Save time for lightcurves
-            # pm.Deterministic("LCmodeltime", t_lc)
+        # Save time for lightcurves
+        # pm.Deterministic("LCmodeltime", t_lc)
 
-            # pdb.set_trace()
+        # pdb.set_trace()
 
-            #Lightcurve Jitter
-            # Log_Jitter = pm.Uniform(f"{name}_Log_Jitter", -6, 3)
-            Ln_Jitter = pm.Uniform("Ln_Jitter", np.log(1e-6), np.log(1e3), shape = 1)
+        #Lightcurve Jitter
+        # Log_Jitter = pm.Uniform(f"{name}_Log_Jitter", -6, 3)
+        Ln_Jitter = pm.Uniform(f"{name}_Ln_Jitter", np.log(1e-6), np.log(1e3), shape = 1)
 
-            #Saving Log_Jitter as value in 
-            LC_Jitter = pm.Deterministic("Jitter", tt.exp(Ln_Jitter))
+        #Saving Log_Jitter as value in 
+        LC_Jitter = pm.Deterministic(f"{name}_Jitter", tt.exp(Ln_Jitter))
 
-            # LC_Jitter = pm.Deterministic(f"{name}_Jitter", tt.power(10, Log_Jitter))
-            # LC_Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3)
-            
-            # Full photometric model, the sum of all transits + the baseline (mean)
-            lc_model = mean + tt.sum(light_curves, axis=-1) # a GP model will be added here 
+        # LC_Jitter = pm.Deterministic(f"{name}_Jitter", tt.power(10, Log_Jitter))
+        # LC_Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3)
+        
+        # Full photometric model, the sum of all transits + the baseline (mean)
+        lc_model = mean + tt.sum(light_curves, axis=-1) # a GP model will be added here 
 
-            lc_error = tt.sqrt(LC_Jitter**2 + flux_error ** 2)
+        lc_error = tt.sqrt(LC_Jitter**2 + flux_error ** 2)
 
-            # The likelihood function assuming known Gaussian uncertainty
-            pm.Normal("transit_obs", mu = lc_model, sd = lc_error, observed = flux, shape = len(flux))
+        # The likelihood function assuming known Gaussian uncertainty
+        pm.Normal(f"{name}_transit_obs", mu = lc_model, sd = lc_error, observed = flux, shape = len(flux))
 
-            parameters[name] = [mean]
-            parameters[f"{name}_noise"] = [Ln_Jitter]
+        parameters[name] = [mean, ustar]
+        parameters[f"{name}_noise"] = [Ln_Jitter]
 
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
@@ -469,10 +467,7 @@ with pm.Model() as model:
 
     # Optimizing system parameters for each lightcurve
     for name in all_datasets:
-        if bool(name.find('TESS')+1):
-            map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, utess])
-        else:
-            map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star, urbo])
+        map_soln = pmx.optimize(map_soln, parameters[name] + [ror, b, r_star])
 
     # Optimizing noise parameter for each instrument
     for name in all_datasets:

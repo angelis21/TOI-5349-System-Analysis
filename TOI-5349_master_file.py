@@ -19,6 +19,7 @@ import arviz as az
 import pickle
 from functools import partial
 from collections import OrderedDict
+from scipy.stats import norm
 
 az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generating trace plots
 # plt.style.use('ggplot')
@@ -160,7 +161,7 @@ kepler_time_offset = 2454833
 periods = [3.3176675]
 # Orbital Period Error 
 period_error = [0.1] #in days, must be in same unit as periods variable
-# Transit Duration
+# Time of mid-transit
 t0s = [2459521.813826 - tess_time_offset]
 # Transit Error
 t0_error = [0.1]
@@ -259,6 +260,8 @@ Rsun2Rjup = u.Rsun.to('Rjup')
 MJup2MSun = u.Mjup.to('Msun')
 MSun2MJup = u.Msun.to('Mjup')
 MSun2MEarth = u.Msun.to('Mearth')
+#Decide if we are using dilution
+tessdilution = True
 
 # For the Radial Velocity Model
 Ks = xo.estimate_semi_amplitude(periods, time_rv, rv, rv_err, t0s = t0s)
@@ -285,7 +288,8 @@ with pm.Model() as model:
     pm.Deterministic("r_jup", r_pl*Rsun2Rjup)
     m_pl = pm.Uniform("m_pl", lower = 0.01, upper = 1000, testval=Expected_msini, shape=nplanets)
     # pm.Deterministic("m_jup", m_pl*MSun2MJup)
-    density_pl = pm.Deterministic("density_pl", m_pl*Mjup2Mearth/((r_pl*Rsun2Rearth)**3) * 5.514) # Convert from rho_earth to g/cm3
+    pm.Deterministic("density_pl", m_pl*Mjup2Mearth/((r_pl*Rsun2Rearth)**3) * 5.514) # Convert from rho_earth to g/cm3
+    pm.Deterministic("logg_pl", tt.log10( const.G.to('cm3 Mjup-1 s-2').value * m_pl / (r_pl * u.Rsun.to('cm') )**2 )  ) #Calculate surface gravity
     
     # Orbital Parameters
     period = pm.Normal("period", mu = np.array(periods), sigma = np.array(period_error), shape = nplanets)
@@ -297,6 +301,7 @@ with pm.Model() as model:
     ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
     ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
     omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
+    pm.Deterministic("omegadeg", omega * u.rad.to('deg'))
     
     # Set up the Orbit Model   
     orbit = xo.orbits.KeplerianOrbit(r_star = r_star, m_star = m_star, 
@@ -314,17 +319,26 @@ with pm.Model() as model:
     pm.Deterministic("semimajoraxis", orbit.a * Rsun2AU)
 
     # Add orbital inclination
-    pm.Deterministic("inclination", orbit.incl)
+    pm.Deterministic("inclination", orbit.incl * u.rad.to('deg'))
 
     # Add time of periastron
-    pm.Deterministic("t_p", orbit.t_periastron)
+    tp = pm.Deterministic("t_p", orbit.t_periastron)
+
+    # Add time of secondary eclipse
+    phase1 = ( t0 - tp ) / period
+    trueanom = 3.0*np.pi/2.0 - omega
+    eccenanom = 2.0*tt.arctan(tt.sqrt((1.0-ecc)/(1.0+ecc))*tt.tan((trueanom)/2.0))
+    Meananom = eccenanom - ecc*tt.sin(eccenanom)
+    phase2 = tt.mod(Meananom/(2.0*np.pi),1)
+    pm.Deterministic("t_s", t0 - period*(phase1-phase2))
 
     # Add transit duration, see Eq 14 & 16 here: https://ui.adsabs.harvard.edu/abs/2010exop.book...55W/abstract, Shubham wrote these for the below for his code
-    sin_incl = pm.Deterministic("sin_incl", tt.sqrt(1 - orbit.cos_incl**2))
+    sin_incl = tt.sqrt(1 - orbit.cos_incl**2)
+    EccentricityMultiplicativeFactor = tt.sqrt(1-ecc**2)/(1+ecc*tt.sin(omega)) # Eq 16
+    pm.Deterministic("transit_duration", (period/np.pi) * tt.arcsin( tt.sqrt( (1+ror)**2 - b**2 ) / (aor*sin_incl) ) * EccentricityMultiplicativeFactor *u.d.to('hr') )
 
-    EccentricityMultiplicativeFactor = pm.Deterministic("X", tt.sqrt(1-(ecc**2))/(1+ecc*tt.sin(omega))) # Eq 16
-
-    pm.Deterministic("transit_duration", (period/np.pi) * tt.arcsin( tt.sqrt( (1+ror)**2 - b**2 ) / (aor*sin_incl) ) * EccentricityMultiplicativeFactor )
+    # Add impact parameter of secondary (Eq 8)
+    pm.Deterministic('bsec', aor * orbit.cos_incl * (1-ecc**2) / (1 - ecc * tt.sin( omega )) )
 
     # Add equilibrium temperature
     pm.Deterministic("equilibrium_temp", teff * tt.sqrt(1/(2*aor)))
@@ -402,7 +416,7 @@ with pm.Model() as model:
     hi_cad_time = {}
 
     for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
-
+        parameters[name] = []
         t_lc = np.linspace(time.min() - 5, time.max() + 5, 5000)
         hi_cad_time[name] = t_lc
 
@@ -413,8 +427,17 @@ with pm.Model() as model:
 
         if bool(name.find('TESS')+1):
             ustar = utess
+            # DILUTE = 1 - F2/(F1+F2)
+            # The fraction of to basline flux that is due to your target.
+            # Where F1 is the flux from the host star, and F2 is the flux from all other sources in the aperture.
+            if tessdilution:
+                dilution = pm.Uniform(f"{name}_dilution", 0, 2, shape = 1)
+                parameters[name] += [dilution]
+            else:
+                dilution = 1
         else:
             ustar = urbo
+            dilution = 1
         star = xo.LimbDarkLightCurve(ustar) 
 
         # Calculates light curve for each planet at its time vector
@@ -435,8 +458,7 @@ with pm.Model() as model:
         # pdb.set_trace()
 
         #Lightcurve Jitter
-        # Log_Jitter = pm.Uniform(f"{name}_Log_Jitter", -6, 3)
-        Ln_Jitter = pm.Uniform(f"{name}_Ln_Jitter", np.log(1e-6), np.log(1e3), shape = 1)
+        Ln_Jitter = pm.Uniform(f"{name}_Ln_Jitter", np.log(1e-10), np.log(1e3), shape = 1)
 
         #Saving Log_Jitter as value in 
         LC_Jitter = pm.Deterministic(f"{name}_Jitter", tt.exp(Ln_Jitter))
@@ -445,14 +467,14 @@ with pm.Model() as model:
         # LC_Jitter = pm.Uniform(f"{name}_Jitter", 0, 1e3)
         
         # Full photometric model, the sum of all transits + the baseline (mean)
-        lc_model = mean + tt.sum(light_curves, axis=-1) # a GP model will be added here 
+        lc_model = mean * ( (1 + tt.sum(light_curves, axis=-1) ) * dilution + (1-dilution) )
 
         lc_error = tt.sqrt(LC_Jitter**2 + flux_error ** 2)
 
         # The likelihood function assuming known Gaussian uncertainty
         pm.Normal(f"{name}_transit_obs", mu = lc_model, sd = lc_error, observed = flux, shape = len(flux))
 
-        parameters[name] = [mean, ustar]
+        parameters[name] += [mean, ustar]
         parameters[f"{name}_noise"] = [Ln_Jitter]
 
     ################## OPTIMIZING ################ OPTIMIZING ########################### OPTIMIZING ##################
@@ -600,9 +622,13 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
 
     lc_mod = map_soln[f'{name}_light_curves']
     lc_modx = np.sort(x_fold)
-    lc_mody = lc_mod[np.argsort(x_fold)]
+    if f'{name}_dilution' in map_soln:
+        dilution = map_soln[f'{name}_dilution']
+    else:
+        dilution = 1
+    lc_mody = map_soln[f'{name}_mean'] * ( (lc_mod[np.argsort(x_fold)] + 1) * dilution + (1-dilution) )
 
-    ax.plot(lc_modx, 1e3 * (lc_mody + map_soln[f'{name}_mean']), c = "purple", zorder = 1) #*******
+    ax.plot(lc_modx, 1e3 * lc_mody, c = "purple", zorder = 1) #*******
 
     # Overplot the phase binned light curve
     lkobj = lk.LightCurve(time = x_fold,
@@ -668,9 +694,9 @@ plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 't
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 
-NSteps = 500
-Nchains = 2
-Ncores = 1
+NSteps = 10000
+Nchains = 8
+Ncores = 8
 with model:
 
     trace = pmx.sample(
@@ -690,14 +716,20 @@ with model:
 
 flat_samps = trace.posterior.stack(sample = ("chain", "draw"))
 
-var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Traditional RV Paramters
-             'utess', 'urbo', "ror", 'aor', 'b', # The transit parameters
+var_names = ["period", "t0", 'ecc', 'omegadeg', 'K', 'RVOffset', #  Traditional RV Paramters (period, tc, eccentricity, omega, semi-major amp, gamma)
+             'utess', 'urbo', "ror", 'aor', 'b', 'inclination', 'transit_duration', # The transit parameters (limb dark, rp/r*, a/r*, impact param, inc)
+             'semimajoraxis', 'bsec', 't_s','t_p', 'ecs', #Derived parameters (a in au, impact param of sec, time of sec, time of peri)
              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The Physical Stellar Parameters
-             'm_pl', 'r_jup',  'density_pl'] # The Planetary Parameters 
-
+             'm_pl', 'r_jup', 'logg_pl', 'density_pl',  # The Planetary Parameters (mass, density, log g_p, rho_p)
+             'RVJitter', # RV systematics
+            ]
+#Transit systematics
 var_names += (np.char.array(list(all_datasets.keys()))+'_Jitter').tolist()
 var_names += (np.char.array(list(all_datasets.keys()))+'_mean').tolist()
-
+for thiskey in (np.char.array(list(all_datasets.keys()))+'_dilution').tolist():
+    if thiskey in map_soln:
+        var_names += [thiskey]
+        
 output_dict = {'all_datasets' : all_datasets,
                'hi_cad_time' : hi_cad_time,
                'time_rv' : time_rv,
@@ -727,7 +759,7 @@ posteriors_df = pd.DataFrame(posteriors)
 posteriors_df['neg1sigma'] = posteriors_df['median'] - posteriors_df.lowerpercentile
 posteriors_df['pos1sigma'] = posteriors_df.upperpercentile - posteriors_df['median']
 
-# posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
+posteriors_df.to_csv('TOI-5349_posteriors_{}.csv'.format(datelabel))
 
 # pdb.set_trace()
 
@@ -741,7 +773,7 @@ posteriors_df['pos1sigma'] = posteriors_df.upperpercentile - posteriors_df['medi
 
 _ = az.plot_trace(trace, var_names = var_names) 
 
-# plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0) 
+plt.savefig('TOI-5349_trace_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0) 
 
 ### CORNER PLOT ###
 ### CORNER PLOT ###
@@ -758,9 +790,8 @@ with model:
         use_math_text=True
         )
 
-# plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+plt.savefig('TOI-5349_corner_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
 
-# pdb.set_trace()
 
 ### STEPS TO READ PKL FILE AND VIEW FIT RESULTS ###
 
@@ -805,44 +836,55 @@ with model:
 # PLOT HIGH CADENCE DATA
 # CHANGE VARIABLES 
 
+#Quantiles, assuming Gaussian distribution
+quantiles = [[1-norm.sf(-1),1-norm.sf(1)], #1sigma
+             [1-norm.sf(-2),1-norm.sf(2)], #2sigma
+             [1-norm.sf(-3),1-norm.sf(3)], #3sigma
+             ][::-1]
 for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items()):
 
-    for n, letter in enumerate("b"):
+    for k, letter in enumerate("b"):
 
         plt.figure()
 
         plt.gca().tick_params(direction = "in", which = 'both',bottom = True, top = False, left = True, right = True)
         # Get the posterior median orbital parameters
-        p = np.median(flat_samps["period"][n])
-        t0 = np.median(flat_samps["t0"][n])
+        p = np.median(flat_samps["period"][k])
+        t0 = np.median(flat_samps["t0"][k])
         
 
         # Plot the folded data
         x_fold = (time - t0 + 0.5 * p) % p - 0.5 * p
         gp_mod=np.zeros(len(time)) #To be modified when using a GP
         m = (np.abs(x_fold) < 0.3) &(flux < 1.05)
-        plt.plot(
-            x_fold[m], flux[m] - gp_mod[m], ".k", label = "data", zorder = -1000)
+        plt.errorbar(x_fold[m], flux[m] - gp_mod[m], yerr = flux_error[m], linestyle='none',
+                     color="k", marker='o', label = "data", zorder = -1000)
 
         # Plot the folded model
-        pred = np.percentile(flat_samps[f"{name}_light_curves"][:, n, :], [16, 50, 84], axis = -1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
-        pred +=1
-        sort=np.argsort(x_fold)
-        plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model")
-        art = plt.fill_between(
-            x_fold[sort], 
-            pred[0][sort], 
-            pred[2][sort], 
-            color = "C1", 
-            alpha = 0.5, 
-            zorder = 1000
-        )
-        art.set_edgecolor("none")
+        for j, thisquantile in enumerate(quantiles):
+            pred = np.percentile(flat_samps[f"{name}_light_curves"][:, k, :], [thisquantile[0]*100, 50, thisquantile[-1]*100], axis = -1) # finding the scatter between the 16th through 84th percentile (its the +/- 1 sigma of a gaussian distribution)
+            if f'{name}_dilution' in map_soln:
+                dilution = np.median(flat_samps[f"{name}_dilution"])
+            else:
+                dilution = 1
+            pred = np.median(flat_samps[f"{name}_mean"]) * ( (pred + 1) * dilution + (1-dilution) )
+            sort=np.argsort(x_fold)
+            if j == 0:
+                plt.plot(x_fold[sort], pred[1][sort], color = "C1", label = "model",zorder=10)
+            art = plt.fill_between(
+                x_fold[sort], 
+                pred[0][sort], 
+                pred[2][sort], 
+                color = "C1", 
+                alpha = 0.9/len(quantiles), 
+                zorder = 1000
+            )
+            art.set_edgecolor("none")
 
         # Annotate the plot with the planet's period
         txt = "period = {0:.4f} +/- {1:.4f} d".format(
-            np.mean(flat_samps["period"][n].values),
-            np.std(flat_samps["period"][n].values),
+            np.mean(flat_samps["period"][k].values),
+            np.std(flat_samps["period"][k].values),
         )
         plt.annotate(
             txt,
@@ -860,8 +902,8 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
         plt.ylabel("de-trended flux")
         plt.title(f"{name} Photometry")
         plt.xlim(-0.3, 0.3)
-        plt.show()
-        # plt.savefig('TOI-5349_transit_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+        plt.savefig(f'TOI-5349_transit_folded_phase_plot_{datelabel}_{name}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
+        plt.close()
 
 
 ######## RV FOLDED PHASE PLOTS ####### RV FOLDED PHASE PLOTS #######
@@ -882,7 +924,7 @@ for n, letter in enumerate("b"):
     bkg = map_soln["RVMean"]
     
     # Plot the folded data
-    x_fold = (rv - t0 + 0.5 * p) % p - 0.5 * p
+    x_fold = (time_rv - t0 + 0.5 * p) % p - 0.5 * p
     # plt.errorbar(x_fold, y_rv -bkg, yerr=rv_err, fmt=".k", label="data")
     for thisinstrument in pd.Series(rv_instrument).unique():
         mask = rv_instrument == thisinstrument
@@ -899,16 +941,18 @@ for n, letter in enumerate("b"):
         plt.tick_params(axis = 'both', which ='minor', direction ='in', length = 4, width = 1)
         
     # Compute the posterior prediction for the folded RV model for this planet
-    t_rv = np.linspace(rv.min() - 5, rv.max() + 5, 5000)
+    t_rv = np.linspace(time_rv.min() - 5, time_rv.max() + 5, 5000)
     t_fold = (t_rv - t0 + 0.5 * p) % p - 0.5 * p
     inds = np.argsort(t_fold)
     bkg = np.median(flat_samps['RVMean'],axis=1)
-    pred = np.percentile(flat_samps["rv_model_pred"][inds,:], [16, 50, 84], axis=-1)
-    plt.plot(t_fold[inds], pred[1], color="C1", label="model")
-    art = plt.fill_between(
-        t_fold[inds], pred[0], pred[2], color="C1", alpha=0.3
-    )
-    art.set_edgecolor("none")
+    for j, thisquantile in enumerate(quantiles):
+        pred = np.percentile(flat_samps["rv_model_pred"][inds,:], [thisquantile[0]*100, 50, thisquantile[-1]*100], axis=-1)
+        if j == 0:
+            plt.plot(t_fold[inds], pred[1], color="C1", label="model", zorder = 10)
+        art = plt.fill_between(
+            t_fold[inds], pred[0], pred[2], color="C1", alpha= 0.9/len(quantiles)
+        )
+        art.set_edgecolor("none")
 
     plt.legend(fontsize=10)
     plt.xlim(-0.5 * p, 0.5 * p)
@@ -926,8 +970,8 @@ for n, letter in enumerate("b"):
     plt.xlabel("phase [days]")
     plt.ylabel("radial velocity [m/s]")
     plt.title("TOI-5349 {}".format(letter))
-    plt.show()
-    # plt.savefig('TOI-5349_RV_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+    plt.savefig('TOI-5349_RV_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+    plt.close()
 
 
 # trace.to_dataframe(trace, var_names=var_names)

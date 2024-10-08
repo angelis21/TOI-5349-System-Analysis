@@ -1,4 +1,4 @@
-# import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash # specifically for cluster usage
+import matplotlib ; matplotlib.use('Agg') #Set so that a windowless server does not crash # specifically for cluster usage
 from matplotlib.colors import to_rgba as rgba
 import lightkurve as lk
 import numpy as np
@@ -691,7 +691,7 @@ with model:
 flat_samps = trace.posterior.stack(sample = ("chain", "draw"))
 
 var_names = ["period", "t0", 'ecc', 'omega', 'K', 'RVOffset', 'RVJitter', #  Traditional RV Paramters
-             'utess', 'urbo' "ror", 'aor', 'b', # The transit parameters
+             'utess', 'urbo', "ror", 'aor', 'b', # The transit parameters
              'teff', 'r_star', 'm_star', 'st_lum', 'rho_star', # The Physical Stellar Parameters
              'm_pl', 'r_jup',  'density_pl'] # The Planetary Parameters 
 
@@ -798,8 +798,6 @@ with model:
 ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ###########
 ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ########### GENERATING FINAL PHASE FOLDED PLOTS ###########
 
-gp_mod=np.zeros(len(time_lc))
-
 ######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
 ######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
 ######## TRANSIT FOLDED PHASE PLOTS ####### TRANSIT FOLDED PHASE PLOTS #######
@@ -821,6 +819,7 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
 
         # Plot the folded data
         x_fold = (time - t0 + 0.5 * p) % p - 0.5 * p
+        gp_mod=np.zeros(len(time)) #To be modified when using a GP
         m = (np.abs(x_fold) < 0.3) &(flux < 1.05)
         plt.plot(
             x_fold[m], flux[m] - gp_mod[m], ".k", label = "data", zorder = -1000)

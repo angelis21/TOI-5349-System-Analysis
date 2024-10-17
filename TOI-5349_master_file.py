@@ -261,11 +261,12 @@ MJup2MSun = u.Mjup.to('Msun')
 MSun2MJup = u.Msun.to('Mjup')
 MSun2MEarth = u.Msun.to('Mearth')
 #Decide if we are using dilution
-tessdilution = True
+tessdilution = False
 
 # For the Radial Velocity Model
 Ks = xo.estimate_semi_amplitude(periods, time_rv, rv, rv_err, t0s = t0s)
 
+# pdb.set_trace()
 
 with pm.Model() as model:
 
@@ -557,7 +558,7 @@ for thiskey in list(map_soln.keys())[:-1]:
     print('{}: {}'.format(thiskey, map_soln[thiskey]))
 
 
-# pdb.set_trace()
+pdb.set_trace()
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ##################
 ################ TRANSIT AND RV INITIAL BEST FIT PLOTS ################## TRANSIT AND RV INITIAL BEST FIT PLOTS ################## 
@@ -566,6 +567,7 @@ t0 = map_soln["t0"]
 period = map_soln["period"] 
 rv_model = map_soln["rv_model"]
 rv_model_pred = map_soln["rv_model_pred"]
+rv_mean = map_soln['RVMean']
 
 vrad = map_soln["vrad"]
 vrad_pred = map_soln["vrad_pred"]
@@ -578,7 +580,7 @@ datelabel = "{:%m-%d-%Y}".format(datetime.datetime.now())
 with model:
     fig, axes = plt.subplots(2, 1, figsize = (10, 5), sharex = True)
     ax = axes[0]
-    ax.errorbar(time_rv, rv - map_soln["RVMean"], yerr = rv_err, fmt = ".k")
+    ax.errorbar(time_rv, rv - rv_mean, yerr = rv_err, fmt = ".k")
     ax.plot(t, vrad_pred, "--k", alpha = 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad_pred), "--k", alpha= 0.5) 
     # axes.plot(t, pmx.eval_in_model(model.vrad), ":k", alpha= 0.5) 
@@ -592,15 +594,46 @@ with model:
 
 
     ax = axes[1]
-    ax.errorbar(time_rv, rv - map_soln['RVMean'] - map_soln["rv_model"], yerr = rv_err, fmt = ".k")
+    ax.errorbar(time_rv, rv - rv_mean - rv_model, yerr = rv_err, fmt = ".k")
     ax.axhline(0, color = "k", lw = 1)
     ax.set_title("residuals")
     ax.set_ylabel("residuals [m/s]")
     # ax.set_xlim(3230, 3250)
     ax.set_xlabel("time [days]")
     ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
-# print(np.unique(map_soln['RVMean'])) 
-# print(map_soln['RVOffset'])
+
+
+################ TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT #############
+################ TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT #############
+################ TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT ######### TRANSIT RESIDUALS PLOT #############
+
+# datelabel = "{:%m-%d-%Y}".format(datetime.datetime.now())
+# with model:
+#     fig, axes = plt.subplots(2, 1, figsize = (10, 5), sharex = True)
+#     ax = axes[0]
+#     ax.errorbar(time_rv, rv - rv_mean, yerr = rv_err, fmt = ".k")
+#     ax.plot(t, vrad_pred, "--k", alpha = 0.5) 
+#     # axes.plot(t, pmx.eval_in_model(model.vrad_pred), "--k", alpha= 0.5) 
+#     # axes.plot(t, pmx.eval_in_model(model.vrad), ":k", alpha= 0.5) 
+
+#     ax.set_title("initial model")
+#     ax.set_ylabel("radial velocity [m/s]")
+#     #plt.legend()
+#     # # fig.savefig('rv-best-initial-best-fit')
+#     # # plt.close(fig)
+#     # plt.plot(t, pmx.eval_in_model(model.bkg_pred), ":k", alpha=0.5, zorder = 100)
+
+
+#     ax = axes[1]
+#     ax.errorbar(time_rv, rv - map_soln['RVMean'] - map_soln["rv_model"], yerr = rv_err, fmt = ".k")
+#     ax.axhline(0, color = "k", lw = 1)
+#     ax.set_title("residuals")
+#     ax.set_ylabel("residuals [m/s]")
+#     # ax.set_xlim(3230, 3250)
+#     ax.set_xlabel("time [days]")
+#     ax.figure.savefig('TOI-5349-b_residuals_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
+# # print(np.unique(map_soln['RVMean'])) 
+# # print(map_soln['RVOffset'])
 
 
 ###### PRELIM TRANSIT PHASE PLOT ###### PRELIM TRANSIT PHASE PLOT ######
@@ -622,13 +655,14 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
 
     lc_mod = map_soln[f'{name}_light_curves']
     lc_modx = np.sort(x_fold)
+
     if f'{name}_dilution' in map_soln:
         dilution = map_soln[f'{name}_dilution']
     else:
         dilution = 1
     lc_mody = map_soln[f'{name}_mean'] * ( (lc_mod[np.argsort(x_fold)] + 1) * dilution + (1-dilution) )
 
-    ax.plot(lc_modx, 1e3 * lc_mody, c = "purple", zorder = 1) #*******
+    ax.plot(lc_modx, 1e3 * lc_mody, c = "blue", zorder = 1) #*******
 
     # Overplot the phase binned light curve
     lkobj = lk.LightCurve(time = x_fold,
@@ -652,10 +686,9 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
     #     zorder = 2,
     #     linewidths = 0,
     # )
-
     ax.set_xlim(-0.5, 0.5)
-    ax.set_ylabel("de-trended flux [ppt]")
-    _ = ax.set_xlabel("time since transit")
+    ax.set_ylabel("Normalized Flux (ppt)")
+    _ = ax.set_xlabel("Days from Mid-Transit")
     # plt.show()
     ax.figure.savefig(f'{name}_TOI-5349-b_LC_phase_plot_{datelabel}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
 
@@ -680,13 +713,13 @@ t_fold = (t - t0 + 0.5 * period) % period - 0.5 * period
 rv_modx = np.sort(t_fold)
 rv_mody = vrad_pred[np.argsort(t_fold)]
 
-plt.plot(rv_modx, rv_mody, c = "purple", zorder = 1, label = 'model') 
+plt.plot(rv_modx, rv_mody, c = "blue", zorder = 1, label = 'model') 
 plt.xlim(-0.5 * period, 0.5 * period)
-plt.title("TOI-5349b RV Phase Plot")
-plt.ylabel("radial velocity [ms/s]")
-plt.xlabel("phase [days]")
+plt.title("TOI-5349b")
+plt.ylabel("RV - Systematic Velocity (ms/s)")
+plt.xlabel("Phase (days)")
 plt.legend()
-plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 'tight', pad_inches = 0.0)
+plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
 
 # pdb.set_trace()
 
@@ -694,8 +727,8 @@ plt.savefig('TOI-5349-b_RV_phase_plot_{}.pdf'.format(datelabel),bbox_inches = 't
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 
-NSteps = 10000
-Nchains = 8
+NSteps = 8000
+Nchains = 4
 Ncores = 8
 with model:
 
@@ -882,10 +915,10 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
             art.set_edgecolor("none")
 
         # Annotate the plot with the planet's period
-        txt = "period = {0:.4f} +/- {1:.4f} d".format(
-            np.mean(flat_samps["period"][k].values),
-            np.std(flat_samps["period"][k].values),
-        )
+        # txt = "period = {0:.4f} +/- {1:.4f} d".format(
+        #     np.mean(flat_samps["period"][k].values),
+        #     np.std(flat_samps["period"][k].values),
+        # )
         plt.annotate(
             txt,
             (0, 0),
@@ -898,9 +931,9 @@ for n, (name, (time, flux, flux_error, texp)) in enumerate(all_datasets.items())
         )
 
         plt.legend(fontsize = 10, loc = 4)
-        plt.xlabel("time since transit [days]")
-        plt.ylabel("de-trended flux")
-        plt.title(f"{name} Photometry")
+        plt.xlabel("Days from Mid-Transit")
+        plt.ylabel("Normalize Flux (ppt)")
+        plt.title(f"{name}")
         plt.xlim(-0.3, 0.3)
         plt.savefig(f'TOI-5349_transit_folded_phase_plot_{datelabel}_{name}.pdf', bbox_inches = 'tight', pad_inches = 0.0)
         plt.close()
@@ -956,8 +989,8 @@ for n, letter in enumerate("b"):
 
     plt.legend(fontsize=10)
     plt.xlim(-0.5 * p, 0.5 * p)
-    plt.xlabel("phase [days]")
-    plt.ylabel("radial velocity [m/s]")
+    plt.xlabel("Phase")
+    plt.ylabel("RV - Systematic Velocity")
     
     def phasetodays(x):
         return x*p
@@ -967,9 +1000,9 @@ for n, letter in enumerate("b"):
     secax.set_xlabel('phase')
 
     plt.legend(fontsize=10)
-    plt.xlabel("phase [days]")
-    plt.ylabel("radial velocity [m/s]")
-    plt.title("TOI-5349 {}".format(letter))
+    plt.xlabel("Phase")
+    plt.ylabel("RV - Systematic Velocity")
+    # plt.title("TOI-5349 {}".format(letter))
     plt.savefig('TOI-5349_RV_folded_phase_plot_{}.pdf'.format(datelabel), bbox_inches = 'tight', pad_inches = 0.0)
     plt.close()
 

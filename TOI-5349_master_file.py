@@ -31,7 +31,9 @@ az.rcParams["plot.max_subplots"] = 100 # set to 100 to avoid error when generati
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
 ################### READING IN DATA #################### READING IN DATA #################### READING IN DATA ####################
- 
+tess_time_offset = 2457000
+kepler_time_offset = 2454833
+# Assuming that TESS data is in BTJD but rest of data is in BJD so thats why we are subtracting tess offset from data
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
 ### PHOTOMETRY DATA ###
@@ -61,12 +63,12 @@ adj_tess_exp = tess_exp[mask2]
 rbo_data1 = pd.read_csv('TOI-5349_20230104_RBO_measurements.csv')
 rbo_data2 = pd.read_csv('TOI-5349_20230114_RBO_measurements.csv')
 
-time_rbo1 = rbo_data1['BJD_TDB'].values
+time_rbo1 = rbo_data1['BJD_TDB'].values - tess_time_offset
 rbo_flux1 = rbo_data1['rel_flux_T1'].values
 rbo_flux_err1 = rbo_data1['rel_flux_err_T1'].values
 rbo_exp = rbo_data1['EXPTIME'].values
 
-time_rbo2 = rbo_data2['BJD_TDB'].values
+time_rbo2 = rbo_data2['BJD_TDB'].values - tess_time_offset
 rbo_flux2 = rbo_data2['rel_flux_T1'].values
 rbo_flux_err2 = rbo_data2['rel_flux_err_T1'].values
 
@@ -77,23 +79,31 @@ norm_rbo_flux2 = rbo_flux2/np.median(rbo_flux2)
 norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
 
 # POMONA DATA #
-pom_data1 = pd.read_csv('TOI-5349_20230104_RBO_measurements.csv')
-pom_data2 = pd.read_csv('TOI-5349_20230114_RBO_measurements.csv')
+pom_data1 = pd.read_csv('Processed_fdb_TESS_3_20250103_233518_00295.fits_measurements.xls',sep='\s+')
+pom_data2 = pd.read_csv('Processed_fdb_TESS_5349_3_20250113_222523_009_affineremap_measurements.xls',sep='\s+')
+pom_data3 = pd.read_csv('Processed_fdb_TESS_5349_3_20250123_210320_00360_affineremap_measurements.xls',sep='\s+')
 
-time_pom1 = pom_data1['BJD_TDB'].values
+time_pom1 = pom_data1['BJD_TDB'].values - tess_time_offset
 pom_flux1 = pom_data1['rel_flux_T1'].values
 pom_flux_err1 = pom_data1['rel_flux_err_T1'].values
 pom_exp = pom_data1['EXPTIME'].values
 
-time_pom2 = pom_data2['BJD_TDB'].values
+time_pom2 = pom_data2['BJD_TDB'].values - tess_time_offset
 pom_flux2 = pom_data2['rel_flux_T1'].values
 pom_flux_err2 = pom_data2['rel_flux_err_T1'].values
+
+time_pom3 = pom_data3['BJD_TDB'].values - tess_time_offset
+pom_flux3 = pom_data3['rel_flux_T1_dfn'].values
+pom_flux_err3 = pom_data3['rel_flux_err_T1_dfn'].values
 
 norm_pom_flux1 = pom_flux1/np.median(pom_flux1)
 norm_pom_flux_err1 = pom_flux_err1/np.median(pom_flux1)
 
 norm_pom_flux2 = pom_flux2/np.median(pom_flux2)
 norm_pom_flux_err2 = pom_flux_err2/np.median(pom_flux2)
+
+norm_pom_flux3 = pom_flux3/np.median(pom_flux3)
+norm_pom_flux_err3 = pom_flux_err3/np.median(pom_flux3)
 
 # Creating individual dictionaries for each photometry dataset based on TESS sector/instrument
 
@@ -119,8 +129,9 @@ rbo_dataset = OrderedDict(
 pomona_dataset = OrderedDict(
     [
 
-        ("Pomona (03-Jan-2025)", [time_pom1, norm_pom_flux1, norm_pom_flux_err1, pom_exp]), 
-        ("Pomona (13-Jan-2025)", [time_pom2, norm_pom_flux2, norm_pom_flux_err2, pom_exp])
+        ("Pomona (04-Jan-2025)", [time_pom1, norm_pom_flux1, norm_pom_flux_err1, pom_exp]), 
+        ("Pomona (14-Jan-2025)", [time_pom2, norm_pom_flux2, norm_pom_flux_err2, pom_exp]),
+        ("Pomona (24-Jan-2025)", [time_pom3, norm_pom_flux3, norm_pom_flux_err3, pom_exp])
 
     ]
     )
@@ -128,9 +139,6 @@ pomona_dataset = OrderedDict(
 
 # Creating one dictionary containing all photometric datasets by merging dicts from above
 all_datasets = {**tess_sector_datasets, **rbo_dataset, **pomona_dataset}
-
-tess_time_offset = 2457000
-kepler_time_offset = 2454833
 
 # Orbital Period
 periods = [3.3176675]
@@ -165,11 +173,11 @@ hpf_data = pd.read_csv('TOI-5349_rv_bin_HPF_013024.csv', header = 0,
                  names = ['time', 'radial_velocity', 'rv_error'])
 hpf_data['rv_instrument'] = 'HPF'
 
-mx_red_time = (mx_red_data['time'] - tess_time_offset).values #
+mx_red_time = mx_red_data['time'].values #
 mx_red_rv = mx_red_data['radial_velocity'].values
 mx_red_rv_err = mx_red_data['rv_error'].values
 
-mx_blue_time = (mx_blue_data['time'] - tess_time_offset).values 
+mx_blue_time = (mx_blue_data['time']).values 
 mx_blue_rv = mx_blue_data['radial_velocity'].values
 mx_blue_rv_err = mx_blue_data['rv_error'].values
 
@@ -194,7 +202,7 @@ t = np.linspace(time_rv.min() - 5, time_rv.max() + 5, 5000)
 periods = [3.3176675]
 # Orbital Period Error 
 period_error = [0.1] #in days, must be in same units as periods variable
-# Mid-Transit Time in BJD (Barycentric Julian Date)
+# Transit Duration
 t0s = [2459521.813826 - tess_time_offset]
 # Transit Error
 t0_error = [0.1]
@@ -216,10 +224,9 @@ MJup2MSun = u.Mjup.to('Msun')
 MSun2MJup = u.Msun.to('Mjup')
 MSun2MEarth = u.Msun.to('Mearth')
 # Decide if we are using dilution
-tessdilution = False
+tessdilution = True
 # Decide if we are loading posterior pkl file
 onlyplot = False
-circular = False
 
 if not onlyplot:
     with pm.Model() as model:
@@ -250,15 +257,11 @@ if not onlyplot:
         else:
             b = pm.Uniform("b", lower = 0, upper = 1, shape=nplanets)        
 
-        #Here are definining our eccentric model
+        #Here are defining our eccentric model
         #Look at section 17 for more information on sampling eccentricity vs. omega on a UnitDisk (https://arxiv.org/pdf/1907.09480.pdf)
-        if circular:
-            ecc = np.repeat(0, nplanets)
-            omega = np.repeat(np.pi/2, nplanets)
-        else:
-            ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
-            ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
-            omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
+        ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
+        ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
+        omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
         pm.Deterministic("omegadeg", omega * u.rad.to('deg'))
         
         # Set up the Orbit Model   
@@ -377,7 +380,9 @@ if not onlyplot:
             parameters[name] = []
             t_lc = np.linspace(time.min() - 5, time.max() + 5, 5000)
             hi_cad_time[name] = t_lc
-            
+
+            # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
+            # with pm.Model(name=name, model=model):
             # The flux zero point
             mean = pm.Normal(f"{name}_mean", mu = 1.0, sigma = 10.0, shape = 1)
 
@@ -647,8 +652,8 @@ if not onlyplot:
     ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ############ SAMPLING THE DATA ################### 
 
     NSteps = 10000
-    Nchains = 32
-    Ncores = 32
+    Nchains = 24
+    Ncores = 24
     with model:
 
         trace = pmx.sample(

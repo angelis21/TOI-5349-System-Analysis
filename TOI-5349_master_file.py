@@ -194,7 +194,7 @@ t = np.linspace(time_rv.min() - 5, time_rv.max() + 5, 5000)
 periods = [3.3176675]
 # Orbital Period Error 
 period_error = [0.1] #in days, must be in same units as periods variable
-# Transit Duration
+# Mid-Transit Time in BJD (Barycentric Julian Date)
 t0s = [2459521.813826 - tess_time_offset]
 # Transit Error
 t0_error = [0.1]
@@ -219,6 +219,7 @@ MSun2MEarth = u.Msun.to('Mearth')
 tessdilution = False
 # Decide if we are loading posterior pkl file
 onlyplot = False
+circular = False
 
 if not onlyplot:
     with pm.Model() as model:
@@ -251,9 +252,13 @@ if not onlyplot:
 
         #Here are definining our eccentric model
         #Look at section 17 for more information on sampling eccentricity vs. omega on a UnitDisk (https://arxiv.org/pdf/1907.09480.pdf)
-        ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
-        ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
-        omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
+        if circular:
+            ecc = np.repeat(0, nplanets)
+            omega = np.repeat(np.pi/2, nplanets)
+        else:
+            ecs = pmx.UnitDisk("ecs", testval = np.array([[0.1, 0.1]] * nplanets).T, shape = (2, nplanets))
+            ecc = pm.Deterministic("ecc", tt.sum(ecs ** 2, axis = 0))
+            omega = pm.Deterministic("omega", tt.arctan2(ecs[1], ecs[0]))
         pm.Deterministic("omegadeg", omega * u.rad.to('deg'))
         
         # Set up the Orbit Model   
@@ -372,9 +377,7 @@ if not onlyplot:
             parameters[name] = []
             t_lc = np.linspace(time.min() - 5, time.max() + 5, 5000)
             hi_cad_time[name] = t_lc
-
-            # We define the per-instrument parameters in a submodel so that we don't have to prefix the names manually
-            # with pm.Model(name=name, model=model):
+            
             # The flux zero point
             mean = pm.Normal(f"{name}_mean", mu = 1.0, sigma = 10.0, shape = 1)
 

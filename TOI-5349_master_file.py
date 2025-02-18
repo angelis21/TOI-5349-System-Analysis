@@ -82,6 +82,8 @@ norm_rbo_flux_err2 = rbo_flux_err2/np.median(rbo_flux2)
 pom_data1 = pd.read_csv('Processed_fdb_TESS_3_20250103_233518_00295.fits_measurements.xls',sep='\s+')
 pom_data2 = pd.read_csv('Processed_fdb_TESS_5349_3_20250113_222523_009_affineremap_measurements.xls',sep='\s+')
 pom_data3 = pd.read_csv('Processed_fdb_TESS_5349_3_20250123_210320_00360_affineremap_measurements.xls',sep='\s+')
+pom_data4 = pd.read_csv('',sep='\s+')
+
 
 time_pom1 = pom_data1['BJD_TDB'].values - tess_time_offset
 pom_flux1 = pom_data1['rel_flux_T1'].values
@@ -96,6 +98,10 @@ time_pom3 = pom_data3['BJD_TDB'].values - tess_time_offset
 pom_flux3 = pom_data3['rel_flux_T1_dfn'].values
 pom_flux_err3 = pom_data3['rel_flux_err_T1_dfn'].values
 
+time_pom4 = pom_data4['BJD_TDB'].values - tess_time_offset
+pom_flux4 = pom_data4['rel_flux_T1_dfn'].values
+pom_flux_err4 = pom_data4['rel_flux_err_T1_dfn'].values
+
 norm_pom_flux1 = pom_flux1/np.median(pom_flux1)
 norm_pom_flux_err1 = pom_flux_err1/np.median(pom_flux1)
 
@@ -104,6 +110,10 @@ norm_pom_flux_err2 = pom_flux_err2/np.median(pom_flux2)
 
 norm_pom_flux3 = pom_flux3/np.median(pom_flux3)
 norm_pom_flux_err3 = pom_flux_err3/np.median(pom_flux3)
+
+norm_pom_flux4 = pom_flux4/np.median(pom_flux4)
+norm_pom_flux_err4 = pom_flux_err4/np.median(pom_flux4)
+
 
 # Creating individual dictionaries for each photometry dataset based on TESS sector/instrument
 
@@ -131,7 +141,8 @@ pomona_dataset = OrderedDict(
 
         ("Pomona (04-Jan-2025)", [time_pom1, norm_pom_flux1, norm_pom_flux_err1, pom_exp]), 
         ("Pomona (14-Jan-2025)", [time_pom2, norm_pom_flux2, norm_pom_flux_err2, pom_exp]),
-        ("Pomona (24-Jan-2025)", [time_pom3, norm_pom_flux3, norm_pom_flux_err3, pom_exp])
+        ("Pomona (24-Jan-2025)", [time_pom3, norm_pom_flux3, norm_pom_flux_err3, pom_exp]),
+        ("Pomona (02-Feb-2025)", [time_pom4, norm_pom_flux4, norm_pom_flux_err4, pom_exp])
 
     ]
     )
